@@ -44,25 +44,26 @@ class JobQueue:
             if deduplicate_key:
                 val = str(payload.get(deduplicate_key, ""))
                 if val:
-                    # Check existing pending or running jobs
+                    # Only active jobs are scanned (idx_jobs_status); JSON matched in SQL
                     cursor.execute(
                         """
-                        SELECT * FROM jobs
+                        SELECT id FROM jobs
                         WHERE type = ? AND status IN ('pending', 'running')
+                          AND CAST(json_extract(payload, '$.' || ?) AS TEXT) = ?
+                        LIMIT 1
                         """,
-                        (job_type,),
+                        (job_type, deduplicate_key, val),
                     )
-                    for row in cursor.fetchall():
-                        candidate = Job.from_row(row)
-                        if str(candidate.payload.get(deduplicate_key, "")) == val:
-                            logger.info(
-                                "Skipping enqueue: Job of type %s for %s=%s already queued (%s)",
-                                job_type,
-                                deduplicate_key,
-                                val,
-                                candidate.id,
-                            )
-                            return None
+                    existing = cursor.fetchone()
+                    if existing:
+                        logger.info(
+                            "Skipping enqueue: Job of type %s for %s=%s already queued (%s)",
+                            job_type,
+                            deduplicate_key,
+                            val,
+                            existing["id"],
+                        )
+                        return None
 
             cursor.execute(
                 """
