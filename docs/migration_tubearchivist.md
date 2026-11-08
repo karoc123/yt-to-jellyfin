@@ -1,26 +1,19 @@
 # TubeArchivist Migration Guide
 
-`yt-to-jellyfin` provides a dedicated migration CLI utility (`migrate-tubearchivist`) to transition your existing **TubeArchivist** archive into a Jellyfin-compliant TV Show library and populate the SQLite catalog.
+`yt-to-jellyfin` provides migration tools both via the CLI utility (`migrate-tubearchivist`) and directly in the web UI under **Abonnements** to transition your existing **TubeArchivist** archive and actual channel subscriptions into a Jellyfin-compliant TV Show library and SQLite catalog.
 
 ---
 
-## 1. What TubeArchivist Stores
+## 1. Important: Media vs. Subscriptions
 
-TubeArchivist archives videos in a flat folder structure under:
-```text
-/youtube/<channel_id>/<video_id>.mp4
-/youtube/<channel_id>/<video_id>.info.json
-/youtube/<channel_id>/<video_id>.jpg
-/youtube/<channel_id>/<video_id>.description
-```
+In TubeArchivist:
+* **Media files** live in `/youtube/<channel_id>/<video_id>.mp4`.
+* **Channel subscriptions** (`channel_subscribed: true`) live in TubeArchivist's internal database (API or Elasticsearch).
 
-The `migrate-tubearchivist` tool automatically:
-1. Scans the source directory and identifies all video files (`.mp4`, `.mkv`, `.webm`, `.avi`, `.mov`).
-2. Extracts metadata from companion `.info.json` (or `.description` and channel-level JSON) with robust fallbacks.
-3. Restructures media into Jellyfin TV Show seasons (`/media/<library>/<Channel>/Season <YYYY>/<Date> - <Title> [<ID>].mp4`).
-4. Generates standard `tvshow.nfo` and episode `.nfo` files with locked metadata (`<lockdata>true</lockdata>`).
-5. Converts or copies video thumbnails to `<video_name>-thumb.jpg`.
-6. Populates the SQLite database (`channels` and `videos` tables).
+> [!IMPORTANT]
+> `yt-to-jellyfin` deliberately **does NOT automatically subscribe** to channels simply because a video exists in the archive (`auto_download = 0`). This ensures that one-off video downloads don't trigger unwanted recurring background downloads.
+>
+> Your actual TubeArchivist channel subscriptions are migrated explicitly — either from a JSON/OPML export, directly via the TubeArchivist REST API, or through the web UI.
 
 ---
 
@@ -30,41 +23,71 @@ Run `migrate-tubearchivist --help` or `python -m app.migration.tubearchivist --h
 
 | Argument | Flag | Default | Description |
 |---|---|---|---|
-| `--source` | `-s` | *Required* | Path to TubeArchivist media directory (e.g. `/youtube` or `/path/to/archive`) |
+| `--source` | `-s` | *None* | Path to TubeArchivist media folder (e.g. `/youtube` or `/path/to/archive`) |
+| `--subscriptions` | `-sub` | *None* | Path to TubeArchivist subscriptions JSON or standard OPML file |
+| `--ta-url` | | *None* | TubeArchivist instance URL (e.g. `http://tubearchivist:8000`) |
+| `--ta-token` | | *None* | TubeArchivist API token (from *Settings -> Application -> API Token*) |
+| `--auto-subscribe-discovered` | | `False` | Also auto-subscribe (`auto_download=1`) to all channels found in video archive |
 | `--dest` | `-d` | `MEDIA_PATH` or `/media` | Target Jellyfin media root directory |
 | `--library` | `-l` | `default` | Target library name (e.g. `default`, `kids`, `dokus`, `tech`) |
 | `--mode` | `-m` | `copy` | File operation mode: `copy`, `move`, `hardlink`, or `symlink` |
-| `--dry-run` | | `False` | Preview scanned items and migration actions without writing files or modifying the database |
+| `--dry-run` | | `False` | Preview scanned items and migration actions without modifying files or database |
 | `--db` | | `data/app.db` | Custom path to SQLite database file |
 
 ---
 
-## 3. Migration Examples
+## 3. How to Export Subscriptions from TubeArchivist
 
-### A. Preview / Dry-Run (Recommended First)
-Preview the migration without altering any files or database records:
+### Option A: Direct REST API (No manual export needed)
+You can let `migrate-tubearchivist` pull your subscriptions directly:
+1. In TubeArchivist: Go to **Settings** -> **Application** -> copy your **API Token**.
+2. Run:
 ```bash
-uv run migrate-tubearchivist --source /mnt/tubearchivist/youtube --dest /media --library default --dry-run
+uv run migrate-tubearchivist --ta-url http://tubearchivist:8000 --ta-token YOUR_TOKEN --library default
 ```
 
-### B. Instant Hardlink Migration (Zero Disk Space Overhead)
-If your TubeArchivist archive and your Jellyfin media share the same filesystem or volume, use `hardlink` for near-instant migration without duplicating disk space:
+### Option B: Export via curl to JSON
+Dump your subscribed channels via TubeArchivist's API:
 ```bash
-uv run migrate-tubearchivist --source /mnt/tubearchivist/youtube --dest /media --library default --mode hardlink
+curl -s "http://<ta-ip>:8000/api/channel/" \
+  -H "Authorization: Token YOUR_TOKEN" \
+  -H "Content-Type: application/json" > subscriptions.json
+```
+Or directly from Elasticsearch (`ta_channel` index):
+```bash
+curl -s -u elastic:PASSWORD -X GET "http://<elasticsearch-host>:9200/ta_channel/_search?size=10000" \
+  -H 'Content-Type: application/json' \
+  -d '{"query": {"term": {"channel_subscribed": true}}}' > subscriptions.json
 ```
 
-### C. Safe Copy Migration
-Safely copy video files while preserving original TubeArchivist files:
-```bash
-uv run migrate-tubearchivist --source /mnt/tubearchivist/youtube --dest /media --library dokus --mode copy
-```
+### Option C: OPML File
+Standard OPML files (e.g. exported from YouTube Takeout, NewPipe, or RSS aggregators) are fully supported.
 
-### D. Running Migration Inside Docker Container
-If running `yt-to-jellyfin` inside Docker, you can mount the TubeArchivist archive folder into the container and execute:
+---
+
+## 4. Migration Examples
+
+### A. Migrate Media and Subscriptions Together
+Migrates videos into Jellyfin Season folders via hardlinks AND imports all subscriptions from a JSON/OPML file:
 ```bash
-docker compose exec yt-to-jellyfin migrate-tubearchivist \
-  --source /tubearchivist_archive \
+uv run migrate-tubearchivist \
+  --source /mnt/tubearchivist/youtube \
   --dest /media \
-  --library default \
-  --mode hardlink
+  --subscriptions /path/to/subscriptions.json \
+  --mode hardlink \
+  --library default
 ```
+
+### B. Migrate Only Subscriptions Directly from Running TubeArchivist
+```bash
+uv run migrate-tubearchivist \
+  --ta-url http://192.168.1.50:8000 \
+  --ta-token 9f8a7b6c5d4e... \
+  --library default
+```
+
+### C. Import via Web UI
+Open **`http://<your-ip>:8099/subscriptions`**:
+* Expand the **Abonnements importieren (TubeArchivist / OPML / JSON)** section.
+* Either upload your `subscriptions.json` / `subscriptions.opml` file, or enter your TubeArchivist URL and API Token.
+* Click **Abos importieren**. All active subscriptions will be imported immediately.

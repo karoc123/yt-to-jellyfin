@@ -14,6 +14,7 @@ from pathlib import Path
 from app.db.database import Database, db
 from app.jellyfin.layout import JellyfinLayout, sanitize_filename
 from app.jellyfin.nfo import NfoGenerator
+from app.migration.subscriptions import SubscriptionsMigrator
 
 logger = logging.getLogger(__name__)
 
@@ -54,14 +55,15 @@ class TubeArchivistMigrator:
 
     def __init__(
         self,
-        source_dir: Path | str,
+        source_dir: Path | str | None = None,
         dest_media_root: Path | str = "/media",
         library: str = "default",
         mode: str = "copy",
         dry_run: bool = False,
+        auto_subscribe_discovered: bool = False,
         database: Database | None = None,
     ) -> None:
-        self.source_dir = Path(source_dir)
+        self.source_dir = Path(source_dir) if source_dir else None
         self.dest_media_root = Path(dest_media_root)
         self.library = library or "default"
         self.mode = mode.lower()
@@ -69,13 +71,15 @@ class TubeArchivistMigrator:
             msg = f"Unsupported transfer mode '{mode}'. Choose copy, move, hardlink, symlink."
             raise ValueError(msg)
         self.dry_run = dry_run
+        self.auto_subscribe_discovered = auto_subscribe_discovered
         self.db = database if database is not None else db
         self.layout = JellyfinLayout(self.dest_media_root)
 
     def scan_source(self) -> list[DiscoveredVideo]:
         """Scan source directory for videos and companion metadata."""
-        if not self.source_dir.exists():
-            logger.error("Source directory does not exist: %s", self.source_dir)
+        if not self.source_dir or not self.source_dir.exists():
+            if self.source_dir:
+                logger.error("Source directory does not exist: %s", self.source_dir)
             return []
 
         candidates: list[DiscoveredVideo] = []
@@ -300,14 +304,15 @@ class TubeArchivistMigrator:
                     with self.db.connection() as conn:
                         cursor = conn.cursor()
 
-                        # Ensure channel exists in database
+                        # Ensure channel exists (auto_download=0 unless requested)
+                        auto_dl_val = 1 if self.auto_subscribe_discovered else 0
                         cursor.execute(
                             """
                             INSERT INTO channels (
                                 id, name, url, folder_name, library,
                                 auto_download, created_at, updated_at
                             )
-                            VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             ON CONFLICT(id) DO UPDATE SET
                                 name = excluded.name,
                                 folder_name = excluded.folder_name,
@@ -320,6 +325,7 @@ class TubeArchivistMigrator:
                                 f"https://www.youtube.com/channel/{item.channel_id}",
                                 sanitize_filename(item.channel_name),
                                 self.library,
+                                auto_dl_val,
                                 now_str,
                                 now_str,
                             ),
@@ -388,13 +394,34 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
     parser = argparse.ArgumentParser(
-        description="Migrate TubeArchivist media directory to Jellyfin layout and catalog."
+        description="Migrate TubeArchivist media directory and subscriptions to Jellyfin & SQLite."
     )
     parser.add_argument(
         "--source",
         "-s",
-        required=True,
+        default=None,
         help="Path to TubeArchivist media folder (e.g. /youtube or /path/to/archive)",
+    )
+    parser.add_argument(
+        "--subscriptions",
+        "-sub",
+        default=None,
+        help="Path to TubeArchivist subscriptions file (JSON or OPML)",
+    )
+    parser.add_argument(
+        "--ta-url",
+        default=None,
+        help="TubeArchivist instance URL (e.g. http://tubearchivist:8000) to fetch subscriptions",
+    )
+    parser.add_argument(
+        "--ta-token",
+        default=None,
+        help="TubeArchivist API token (Settings -> Application -> API Token)",
+    )
+    parser.add_argument(
+        "--auto-subscribe-discovered",
+        action="store_true",
+        help="Subscribe (auto_download=1) to all channels found in video archive (default: false)",
     )
     parser.add_argument(
         "--dest",
@@ -428,42 +455,75 @@ def main() -> None:
 
     args = parser.parse_args()
 
+    if not args.source and not args.subscriptions and not args.ta_url:
+        parser.error("Specify at least --source, --subscriptions, or --ta-url.")
+
     database = Database(args.db) if args.db else db
-    # Ensure database migrations are up to date
     database.run_migrations()
 
-    migrator = TubeArchivistMigrator(
-        source_dir=args.source,
-        dest_media_root=args.dest,
-        library=args.library,
-        mode=args.mode,
-        dry_run=args.dry_run,
-        database=database,
-    )
-
     print("--- TubeArchivist Migration Tool ---")
-    print(f"Source:      {args.source}")
-    print(f"Destination: {args.dest}")
-    print(f"Library:     {args.library}")
-    print(f"Mode:        {args.mode}")
-    print(f"Dry Run:     {args.dry_run}")
+    if args.source:
+        print(f"Source Media:  {args.source}")
+        print(f"Destination:   {args.dest}")
+        print(f"Transfer Mode: {args.mode}")
+    if args.subscriptions:
+        print(f"Subscriptions: {args.subscriptions}")
+    if args.ta_url:
+        print(f"TubeArchivist: {args.ta_url}")
+    print(f"Library:       {args.library}")
+    print(f"Dry Run:       {args.dry_run}")
     print("-------------------------------------")
 
-    result = migrator.migrate()
+    # 1. Migrate Subscriptions if provided
+    subs_migrator = SubscriptionsMigrator(database=database)
+    if args.subscriptions:
+        if args.dry_run:
+            print(f"[DRY-RUN] Would import subscriptions from {args.subscriptions}")
+        else:
+            try:
+                cnt = subs_migrator.import_from_file(args.subscriptions, library=args.library)
+                print(f"Imported {cnt} subscriptions from {args.subscriptions}")
+            except Exception as exc:
+                print(f"Failed to import subscriptions: {exc}")
 
-    print("\n--- Migration Summary ---")
-    print(f"Scanned Videos:   {result.scanned_count}")
-    print(f"Migrated Videos:  {result.migrated_count}")
-    print(f"Failed Videos:    {result.failed_count}")
-    print(f"Channels Created: {result.channels_created}")
-    if result.errors:
-        print(f"Errors ({len(result.errors)}):")
-        for err in result.errors[:10]:
-            print(f"  - {err}")
-    print("-------------------------")
+    if args.ta_url and args.ta_token:
+        if args.dry_run:
+            print(f"[DRY-RUN] Would fetch subscriptions via API from {args.ta_url}")
+        else:
+            try:
+                channels = subs_migrator.fetch_from_tubearchivist_api(args.ta_url, args.ta_token)
+                cnt = subs_migrator.import_channels(channels, library=args.library)
+                print(f"Imported {cnt} subscriptions directly via TubeArchivist API")
+            except Exception as exc:
+                print(f"Failed to import from TubeArchivist API: {exc}")
 
-    if result.failed_count > 0:
-        sys.exit(1)
+    # 2. Migrate Media files if source is provided
+    if args.source:
+        migrator = TubeArchivistMigrator(
+            source_dir=args.source,
+            dest_media_root=args.dest,
+            library=args.library,
+            mode=args.mode,
+            dry_run=args.dry_run,
+            auto_subscribe_discovered=args.auto_subscribe_discovered,
+            database=database,
+        )
+
+        result = migrator.migrate()
+
+        print("\n--- Media Migration Summary ---")
+        print(f"Scanned Videos:   {result.scanned_count}")
+        print(f"Migrated Videos:  {result.migrated_count}")
+        print(f"Failed Videos:    {result.failed_count}")
+        print(f"Channels Created: {result.channels_created}")
+        if result.errors:
+            print(f"Errors ({len(result.errors)}):")
+            for err in result.errors[:10]:
+                print(f"  - {err}")
+        print("-------------------------------")
+
+        if result.failed_count > 0:
+            sys.exit(1)
 
 
 if __name__ == "__main__":
