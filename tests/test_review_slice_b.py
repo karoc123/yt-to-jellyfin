@@ -328,7 +328,6 @@ def test_b5_dedup_behaviour_regression(queue: JobQueue) -> None:
 # --- B6: finished jobs must be cleaned up ------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="B6: no cleanup for finished jobs")
 def test_b6_cleanup_removes_old_finished_jobs(queue: JobQueue, temp_db: Database) -> None:
     """Desired API: `JobQueue.cleanup_finished(older_than_days: int) -> int` deletes
     completed/failed/cancelled jobs finished more than N days ago."""

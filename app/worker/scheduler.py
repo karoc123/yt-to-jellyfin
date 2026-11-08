@@ -8,9 +8,13 @@ from app.worker.queue import JobQueue
 
 logger = logging.getLogger(__name__)
 
+# Finished jobs (completed/failed/cancelled) are kept this long for the queue view
+JOB_RETENTION_DAYS = 30
+
 
 class Scheduler:
-    """Every `interval_seconds`, enqueue one `poll_channels` and one `retention` job."""
+    """Every `interval_seconds`, enqueue one `poll_channels` and one `retention` job
+    and remove old finished jobs."""
 
     def __init__(
         self,
@@ -22,9 +26,10 @@ class Scheduler:
         self._task: asyncio.Task | None = None
 
     def tick(self) -> None:
-        """Enqueue periodic jobs; at most one pending/running job of each type."""
+        """Enqueue periodic jobs (at most one pending/running of each type), prune old jobs."""
         for job_type in ("poll_channels", "retention"):
             self.queue.enqueue(job_type, {}, unique=True)
+        self.queue.cleanup_finished(older_than_days=JOB_RETENTION_DAYS)
 
     def start(self) -> None:
         """Start the scheduler loop as an asyncio task (first tick after one interval)."""

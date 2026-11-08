@@ -1,6 +1,7 @@
 """SQLite-backed queue manager with atomic transitions, deduplication, and crash recovery."""
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from app.db.database import Database, db
@@ -165,6 +166,28 @@ class JobQueue:
             if count > 0:
                 logger.warning("Recovered %d crashed job(s) back to pending", count)
             return count
+
+    def cleanup_finished(self, older_than_days: int) -> int:
+        """Delete completed/failed/cancelled jobs finished more than N days ago."""
+        cutoff = (datetime.now(UTC) - timedelta(days=older_than_days)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        with self.db.connection() as conn:
+            cursor = conn.execute(
+                """
+                DELETE FROM jobs
+                WHERE status IN ('completed', 'failed', 'cancelled')
+                  AND COALESCE(completed_at, created_at) < ?
+                """,
+                (cutoff,),
+            )
+            if cursor.rowcount:
+                logger.info(
+                    "Removed %d finished job(s) older than %d days",
+                    cursor.rowcount,
+                    older_than_days,
+                )
+            return cursor.rowcount
 
     def get_job(self, job_id: str) -> Job | None:
         """Retrieve a specific job by id."""
