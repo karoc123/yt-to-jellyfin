@@ -259,3 +259,22 @@ def test_browser_shows_channel_poster(
     assert res.status_code == 200
     assert res.content == poster.read_bytes()
     assert test_client.get("/api/media/poster?channel_id=UCmissing").status_code == 404
+
+
+def test_subscribe_unresolvable_channel_is_not_inserted(
+    test_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failed @handle resolution redirects back without creating a channel row."""
+
+    def _fail(channel_input: str) -> tuple[str, str]:
+        raise ValueError("synthetic resolution failure")
+
+    monkeypatch.setattr("app.api.endpoints.actions.resolve_channel", _fail)
+    res = test_client.post(
+        "/api/subscriptions",
+        data={"channel_input": "@doesnotexist", "library": "default"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    with Database(tmp_path / "web_test.db").connection() as conn:
+        assert conn.execute("SELECT COUNT(*) FROM channels").fetchone()[0] == 0

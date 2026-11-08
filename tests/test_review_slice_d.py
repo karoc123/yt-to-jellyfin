@@ -424,7 +424,6 @@ def client(monkeypatch: pytest.MonkeyPatch, temp_db: Database) -> TestClient:
     main_module.app.dependency_overrides.clear()
 
 
-@pytest.mark.xfail(strict=True, reason="D7: @handle/URL not resolved, name required")
 @pytest.mark.parametrize("channel_input", ["@synthhandle", "https://www.youtube.com/@synthhandle"])
 def test_d7_subscribe_by_handle(
     fake_ydl: type[FakeYoutubeDL],

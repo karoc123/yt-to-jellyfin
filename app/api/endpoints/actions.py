@@ -1,18 +1,25 @@
 """HTTP endpoints for video actions, quick download enqueue, and media serving."""
 
 import asyncio
+import logging
+import re
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
+from app.core.config import settings
 from app.db import db, get_db
+from app.downloader.options import DownloadOptions
+from app.downloader.service import downloader
 from app.jellyfin import jellyfin_layout
 from app.migration.subscriptions import SubscriptionsMigrator
 from app.retention import retention_engine
 from app.worker.poller import SubscriptionPoller
 from app.worker.queue import JobQueue
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["actions"])
 
@@ -151,23 +158,65 @@ def _positive_int_or_none(value: str | None) -> int | None:
     return int(value) if value.isdigit() and int(value) > 0 else None
 
 
+CHANNEL_ID_RE = re.compile(r"^UC[\w-]+$")
+CHANNEL_URL_ID_RE = re.compile(r"/channel/(UC[\w-]+)")
+
+
+def channel_lookup_url(channel_input: str) -> str:
+    """Turn a UC id, @handle, channel path or URL into a YouTube URL for yt-dlp."""
+    value = channel_input.strip()
+    if value.startswith(("http://", "https://")):
+        return value
+    if CHANNEL_ID_RE.match(value):
+        return f"https://www.youtube.com/channel/{value}"
+    value = value.lstrip("/")
+    if value.startswith(("youtube.com/", "www.youtube.com/", "m.youtube.com/")):
+        return f"https://{value}"
+    if value.startswith(("@", "channel/", "c/", "user/")):
+        return f"https://www.youtube.com/{value}"
+    return f"https://www.youtube.com/@{value}"
+
+
+def resolve_channel(channel_input: str) -> tuple[str, str]:
+    """Resolve any channel reference to (channel_id, name) via yt-dlp (blocking)."""
+    options = DownloadOptions(cookies_path=settings.cookies_path)
+    info = downloader.extract_channel_info(channel_lookup_url(channel_input), options)
+    channel_id = str(info.get("channel_id") or info.get("id") or "")
+    if not CHANNEL_ID_RE.match(channel_id):
+        raise ValueError(f"No channel ID found for {channel_input!r}")
+    name = str(info.get("channel") or info.get("uploader") or info.get("title") or "")
+    return channel_id, name.strip()
+
+
 @router.post("/subscriptions")
 async def add_subscription(
     channel_input: str = Form(...),
-    name: str = Form(...),
+    name: str = Form(""),
     library: str = Form("default"),
     retention_count: str | None = Form(None),
     retention_days: str | None = Form(None),
     db_conn=Depends(get_db),
 ) -> RedirectResponse:
-    """Add a new YouTube channel subscription."""
-    channel_id = channel_input.strip()
-    if "/" in channel_id:
-        channel_id = channel_id.rstrip("/").split("/")[-1]
+    """Add a YouTube channel subscription (UC id, @handle or channel URL; name optional)."""
+    redirect = RedirectResponse(f"/subscriptions?lib={library}", status_code=303)
+    channel_input = channel_input.strip()
+    name = name.strip()
+
+    known_id = CHANNEL_URL_ID_RE.search(channel_input)
+    if CHANNEL_ID_RE.match(channel_input) and name:
+        channel_id = channel_input
+    elif known_id and name:
+        channel_id = known_id.group(1)
+    else:
+        try:
+            channel_id, resolved_name = await asyncio.to_thread(resolve_channel, channel_input)
+        except Exception as exc:
+            logger.warning("Could not resolve channel %r: %s", channel_input, exc)
+            return redirect
+        name = name or resolved_name or channel_id
 
     r_count = _positive_int_or_none(retention_count)
     r_days = _positive_int_or_none(retention_days)
-
     feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 
     cursor = db_conn.cursor()
@@ -179,8 +228,8 @@ async def add_subscription(
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
         ON CONFLICT(id) DO UPDATE SET
-            name = excluded.name,
-            url = excluded.url,
+            name = COALESCE(NULLIF(excluded.name, ''), channels.name),
+            url = COALESCE(NULLIF(excluded.url, ''), channels.url),
             feed_url = excluded.feed_url,
             library = excluded.library,
             retention_count = excluded.retention_count,
@@ -190,16 +239,16 @@ async def add_subscription(
         """,
         (
             channel_id,
-            name.strip(),
-            f"https://www.youtube.com/{channel_input.strip()}",
+            name,
+            f"https://www.youtube.com/channel/{channel_id}",
             feed_url,
-            name.strip(),
+            name,
             library or "default",
             r_count,
             r_days,
         ),
     )
-    return RedirectResponse(f"/subscriptions?lib={library}", status_code=303)
+    return redirect
 
 
 @router.post("/subscriptions/sync")
