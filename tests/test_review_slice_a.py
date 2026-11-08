@@ -101,7 +101,6 @@ SAMPLE_META = VideoMetadata(
 )
 
 
-@pytest.mark.xfail(strict=True, reason="A1: quick download lands in 'Unknown Channel/'")
 def test_a1_quick_download_uses_channel_from_metadata(
     queue: JobQueue, temp_db: Database, tmp_path: Path
 ) -> None:

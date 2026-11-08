@@ -98,8 +98,6 @@ class BackgroundWorker:
         """Execute video download, layout organization, NFO writing, and DB record creation."""
         payload = job.payload
         url = payload.get("url") or f"https://www.youtube.com/watch?v={payload.get('video_id')}"
-        channel_id = payload.get("channel_id") or "unknown_channel"
-        channel_name = payload.get("channel_name") or "Unknown Channel"
         library = payload.get("library") or "default"
 
         # Read format and SponsorBlock settings from payload or defaults
@@ -110,7 +108,14 @@ class BackgroundWorker:
         sponsorblock_remove = payload.get("sponsorblock_remove", [])
         sponsorblock_mark = payload.get("sponsorblock_mark", [])
 
-        # Step 1: Ensure channel folder and write channel tvshow.nfo if missing
+        # Step 1: Extract metadata first (channel + publish date/year for Season directory)
+        meta = await self.downloader.async_extract_info(url)
+        channel_id = payload.get("channel_id") or meta.channel_id or "unknown_channel"
+        channel_name = payload.get("channel_name") or meta.channel or "Unknown Channel"
+        pub_date = meta.upload_date or payload.get("published_at", "") or ""
+        year = pub_date[:4] if len(pub_date) >= 4 and pub_date[:4].isdigit() else "Unknown"
+
+        # Step 2: Ensure channel folder and write channel tvshow.nfo if missing
         self.layout.ensure_channel_structure(channel_name, library=library)
         ch_nfo_path = self.layout.get_channel_nfo_path(channel_name, library=library)
         if not ch_nfo_path.exists():
@@ -119,11 +124,6 @@ class BackgroundWorker:
                 title=channel_name,
                 channel_id=channel_id,
             )
-
-        # Step 2: Extract metadata first (to know publish date/year for Season directory)
-        meta = await self.downloader.async_extract_info(url)
-        pub_date = meta.upload_date or payload.get("published_at", "") or ""
-        year = pub_date[:4] if len(pub_date) >= 4 and pub_date[:4].isdigit() else "Unknown"
 
         season_dir = self.layout.ensure_season_structure(channel_name, year, library=library)
         video_filename = self.layout.get_video_filename(
