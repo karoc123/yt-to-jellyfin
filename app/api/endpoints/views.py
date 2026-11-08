@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.api.endpoints.actions import channel_poster_path
 from app.core.config import settings
 from app.db import get_db
 from app.worker.queue import JobQueue
@@ -122,6 +123,8 @@ async def view_browser(
                 """
             )
         channels = [dict(r) for r in cursor.fetchall()]
+        for ch in channels:
+            ch["has_poster"] = channel_poster_path(ch) is not None
 
     return templates.TemplateResponse(
         request=request,

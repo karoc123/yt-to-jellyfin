@@ -369,7 +369,6 @@ def test_d4_episode_numbers_from_date(
 # --- D5: channel artwork on first download --------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="D5: no channel poster.jpg")
 def test_d5_channel_poster_written(
     fake_ydl: type[FakeYoutubeDL], temp_db: Database, media_root: Path
 ) -> None:

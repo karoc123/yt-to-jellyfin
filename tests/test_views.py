@@ -234,3 +234,28 @@ def test_subscriptions_import_endpoint(test_client: TestClient, tmp_path: Path) 
         assert row["name"] == "Uploaded Channel"
         assert row["library"] == "kids"
         assert row["auto_download"] == 1
+
+
+def test_browser_shows_channel_poster(
+    test_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Channel grid uses the local poster.jpg via /api/media/poster when present."""
+    from app.core import config
+
+    media = tmp_path / "media"
+    monkeypatch.setattr(config.settings, "media_dir", media)
+    poster = media / "default" / "Poster Kanal" / "poster.jpg"
+    poster.parent.mkdir(parents=True)
+    poster.write_bytes(b"\xff\xd8synthetic\xff\xd9")
+    with Database(tmp_path / "web_test.db").connection() as conn:
+        conn.execute(
+            "INSERT INTO channels (id, name, url, folder_name, library)"
+            " VALUES ('UCposter1', 'Poster Kanal', 'u', 'Poster Kanal', 'default')"
+        )
+
+    page = test_client.get("/browser")
+    assert "/api/media/poster?channel_id=UCposter1" in page.text
+    res = test_client.get("/api/media/poster?channel_id=UCposter1")
+    assert res.status_code == 200
+    assert res.content == poster.read_bytes()
+    assert test_client.get("/api/media/poster?channel_id=UCmissing").status_code == 404

@@ -232,6 +232,19 @@ class BackgroundWorker:
                 count += 1
         return count
 
+    async def _fetch_channel_artwork(
+        self, channel_url: str, channel_dir: Path, options: DownloadOptions
+    ) -> str:
+        """Fetch poster.jpg/fanart.jpg; returns the channel description. Never raises."""
+        try:
+            info = await asyncio.to_thread(
+                self.downloader.fetch_channel_artwork, channel_url, channel_dir, options
+            )
+        except Exception as exc:
+            logger.warning("Channel artwork for %s failed: %s", channel_url, exc)
+            return ""
+        return str(info.get("description") or "") if isinstance(info, dict) else ""
+
     async def _handle_download_video(self, job: Job) -> None:
         """Execute video download, layout organization, NFO writing, and DB record creation."""
         payload = job.payload
@@ -280,13 +293,24 @@ class BackgroundWorker:
         pub_date = meta.upload_date or payload.get("published_at", "") or ""
         year = pub_date[:4] if len(pub_date) >= 4 and pub_date[:4].isdigit() else "Unknown"
 
-        # Step 2: Ensure channel folder and write channel tvshow.nfo if missing
-        self.layout.ensure_channel_structure(channel_name, library=library)
+        # Step 2: Ensure channel folder, artwork (first download) and tvshow.nfo
+        channel_dir = self.layout.ensure_channel_structure(channel_name, library=library)
+        channel_plot = ""
+        if not self.layout.get_channel_poster_path(channel_name, library=library).exists():
+            channel_url = (
+                f"https://www.youtube.com/channel/{channel_id}"
+                if channel_id.startswith("UC")
+                else meta.channel_url
+            )
+            channel_plot = await self._fetch_channel_artwork(
+                channel_url, channel_dir, DownloadOptions(**opts_kwargs)
+            )
         ch_nfo_path = self.layout.get_channel_nfo_path(channel_name, library=library)
         if not ch_nfo_path.exists():
             self.nfo.write_tvshow_nfo(
                 dest_path=ch_nfo_path,
                 title=channel_name,
+                plot=channel_plot,
                 channel_id=channel_id,
             )
 

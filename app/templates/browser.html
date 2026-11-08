@@ -29,8 +29,12 @@
 <div class="grid">
   {% for ch in channels %}
   <a href="/browser?channel_id={{ ch.id }}{% if current_lib and current_lib != 'all' %}&lib={{ current_lib }}{% endif %}" class="card" style="text-decoration: none;">
-    <div style="height: 120px; background: linear-gradient(135deg, #1f6feb 0%, #161b22 100%); display: flex; align-items: center; justify-content: center; font-size: 2.5rem;">
+    <div style="height: 120px; background: linear-gradient(135deg, #1f6feb 0%, #161b22 100%); display: flex; align-items: center; justify-content: center; font-size: 2.5rem; overflow: hidden;">
+      {% if ch.has_poster %}
+      <img src="/api/media/poster?channel_id={{ ch.id }}" alt="{{ ch.name }}" loading="lazy" style="height: 100%; width: 100%; object-fit: contain;">
+      {% else %}
       📺
+      {% endif %}
     </div>
     <div class="card-body">
       <span class="card-title">{{ ch.name }}</span>

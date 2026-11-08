@@ -408,6 +408,65 @@ class YtDlpService:
         except Exception as exc:
             raise DownloadFailedError(f"Unexpected error downloading {url}: {exc}") from exc
 
+    def _channel_params(self, options: DownloadOptions | None = None) -> dict[str, Any]:
+        """Minimal yt-dlp params for channel metadata (no entries, cookies if configured)."""
+        params: dict[str, Any] = {
+            "quiet": True,
+            "no_warnings": True,
+            "skip_download": True,
+            "extract_flat": True,
+            "playlist_items": "0",
+        }
+        cookies = options.cookies_path if options else None
+        if cookies and Path(cookies).is_file():
+            params["cookiefile"] = str(cookies)
+        return params
+
+    def extract_channel_info(
+        self, channel_url: str, options: DownloadOptions | None = None
+    ) -> dict[str, Any]:
+        """Fetch channel metadata (id, name, thumbnails) without enumerating its videos."""
+        try:
+            with yt_dlp.YoutubeDL(self._channel_params(options)) as ydl:
+                info = ydl.extract_info(channel_url, download=False)
+        except (DownloadError, ExtractorError) as exc:
+            raise self._classify_error(exc, channel_url) from exc
+        if not info:
+            raise DownloadFailedError(f"No channel metadata returned for {channel_url}")
+        return info
+
+    def fetch_channel_artwork(
+        self,
+        channel_url: str,
+        channel_dir: Path | str,
+        options: DownloadOptions | None = None,
+    ) -> dict[str, Any]:
+        """Write the channel avatar to `poster.jpg` and banner to `fanart.jpg` if missing.
+
+        Images are fetched through yt-dlp's opener (honours cookies/proxy). Returns the
+        channel info dict. Errors on individual images are logged, not raised.
+        """
+        target_dir = Path(channel_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        with yt_dlp.YoutubeDL(self._channel_params(options)) as ydl:
+            info = ydl.extract_info(channel_url, download=False) or {}
+            thumbs = {t.get("id"): t.get("url") for t in info.get("thumbnails") or [] if t}
+            for filename, ids in (
+                ("poster.jpg", ("avatar_uncropped", "avatar")),
+                ("fanart.jpg", ("banner_uncropped", "banner")),
+            ):
+                dest = target_dir / filename
+                url = next((thumbs[i] for i in ids if thumbs.get(i)), None)
+                if dest.exists() or not url:
+                    continue
+                try:
+                    data = ydl.urlopen(url).read()
+                    if data:
+                        dest.write_bytes(data)
+                except Exception as exc:
+                    logger.warning("Could not fetch %s for %s: %s", filename, channel_url, exc)
+        return info
+
     async def async_extract_info(
         self,
         url: str,

@@ -8,6 +8,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from app.db import db, get_db
+from app.jellyfin import jellyfin_layout
 from app.migration.subscriptions import SubscriptionsMigrator
 from app.retention import retention_engine
 from app.worker.poller import SubscriptionPoller
@@ -115,6 +116,32 @@ async def get_video_thumbnail(
     if not path.is_file():
         raise HTTPException(status_code=404, detail="File not found")
 
+    return FileResponse(str(path))
+
+
+def channel_poster_path(channel: dict) -> Path | None:
+    """Existing poster.jpg of a channel folder (by name, then stored folder_name)."""
+    library = channel.get("library") or "default"
+    for folder in (channel.get("name"), channel.get("folder_name")):
+        if folder:
+            path = jellyfin_layout.get_channel_poster_path(folder, library=library)
+            if path.is_file():
+                return path
+    return None
+
+
+@router.get("/media/poster")
+async def get_channel_poster(
+    channel_id: str,
+    db_conn=Depends(get_db),
+) -> FileResponse:
+    """Serve a channel's local poster.jpg."""
+    row = db_conn.execute(
+        "SELECT name, folder_name, library FROM channels WHERE id = ?", (channel_id,)
+    ).fetchone()
+    path = channel_poster_path(dict(row)) if row else None
+    if not path:
+        raise HTTPException(status_code=404, detail="Poster not found")
     return FileResponse(str(path))
 
 
