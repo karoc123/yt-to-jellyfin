@@ -262,7 +262,6 @@ def test_d1_single_extraction_per_download(
 # --- D2: download progress reaches the job row ----------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="D2: progress hook is a no-op")
 def test_d2_progress_written_to_job(
     fake_ydl: type[FakeYoutubeDL], temp_db: Database, media_root: Path
 ) -> None:

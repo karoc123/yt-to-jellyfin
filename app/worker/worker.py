@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -9,8 +10,8 @@ from typing import Any
 from app.core.config import settings
 from app.db.database import Database, db
 from app.downloader.exceptions import VideoUnavailableError
-from app.downloader.options import DownloadOptions
-from app.downloader.service import YtDlpService, downloader
+from app.downloader.options import DownloadOptions, ProgressUpdate
+from app.downloader.service import YtDlpService, downloader, wrap_progress_hook
 from app.jellyfin import JellyfinLayout, NfoGenerator, jellyfin_layout, nfo_generator
 from app.retention.engine import RetentionConfig, RetentionEngine
 from app.worker.models import MAX_VIDEO_ATTEMPTS, Job, utc_now_str
@@ -18,6 +19,9 @@ from app.worker.poller import SubscriptionPoller
 from app.worker.queue import JobQueue
 
 logger = logging.getLogger(__name__)
+
+# Minimum seconds between two progress writes of the same job
+PROGRESS_WRITE_INTERVAL = 1.0
 
 
 class BackgroundWorker:
@@ -246,16 +250,30 @@ class BackgroundWorker:
             **opts_kwargs,
         )
 
-        # Progress reporting callback
-        def _on_progress(update: Any) -> None:
-            if hasattr(update, "percentage"):
-                self.queue.update_progress(job.id, int(update.percentage))
+        # Progress reporting (runs in the download thread); throttled DB writes
+        last_written: dict[str, float] = {}
+
+        def _on_progress(update: ProgressUpdate) -> None:
+            if update.status != "downloading":
+                return
+            pct = int(update.percentage)
+            now_ts = time.monotonic()
+            if last_written and (
+                abs(pct - last_written["pct"]) < 1
+                or now_ts - last_written["ts"] < PROGRESS_WRITE_INTERVAL
+            ):
+                return
+            last_written.update(pct=pct, ts=now_ts)
+            try:
+                self.queue.update_progress(job.id, pct)
+            except Exception as exc:
+                logger.debug("Could not write progress for job %s: %s", job.id, exc)
 
         # Step 4: Execute download, reusing the extracted info (no second extraction)
         download_kwargs: dict[str, Any] = {
             "url": url,
             "options": dl_options,
-            "progress_hook": lambda d: None,  # yt-dlp internal hook
+            "progress_hook": wrap_progress_hook(_on_progress),
         }
         if meta.raw_info:
             download_kwargs["info"] = meta.raw_info
