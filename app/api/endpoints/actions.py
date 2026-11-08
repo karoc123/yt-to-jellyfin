@@ -4,6 +4,8 @@ import asyncio
 import logging
 import re
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
@@ -58,23 +60,41 @@ async def create_download_job(
     return RedirectResponse(f"/?lib={chosen_lib}", status_code=303)
 
 
+def _browser_redirect(db_conn: Any, video_id: str, lib: str | None) -> RedirectResponse:
+    """Redirect back to the video's channel in the browser, keeping the active library."""
+    row = db_conn.execute("SELECT channel_id FROM videos WHERE id = ?", (video_id,)).fetchone()
+    params = {}
+    if row and row["channel_id"]:
+        params["channel_id"] = row["channel_id"]
+    if lib and lib != "all":
+        params["lib"] = lib
+    query = f"?{urlencode(params)}" if params else ""
+    return RedirectResponse(f"/browser{query}", status_code=303)
+
+
 @router.post("/videos/pin")
 async def pin_video(
     video_id: str = Form(...),
     is_pinned: int = Form(...),
+    lib: str | None = Form(None),
+    db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Toggle pin status on a single video."""
     retention_engine.set_pin_status(video_id, bool(is_pinned))
-    return RedirectResponse("/browser", status_code=303)
+    return _browser_redirect(db_conn, video_id, lib)
 
 
 @router.post("/videos/delete")
 async def delete_single_video(
     video_id: str = Form(...),
+    lib: str | None = Form(None),
+    db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Delete a video and all companion artifacts."""
+    # Resolve the channel before the row may be removed
+    redirect = _browser_redirect(db_conn, video_id, lib)
     retention_engine.delete_video(video_id, force=True)
-    return RedirectResponse("/browser", status_code=303)
+    return redirect
 
 
 @router.post("/videos/bulk-delete")

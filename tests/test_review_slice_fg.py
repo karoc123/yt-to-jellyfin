@@ -230,7 +230,6 @@ async def _max_loop_gap(coro_factory: Any) -> float:
 # --- F1: pin/delete keep the channel context ------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="F1: pin/delete redirect loses channel context")
 @pytest.mark.parametrize("action", ["pin", "delete"])
 @pytest.mark.parametrize("lib", [None, "kids"])
 def test_f1_video_action_redirects_back_to_channel(

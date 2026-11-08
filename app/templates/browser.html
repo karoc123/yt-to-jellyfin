@@ -90,6 +90,7 @@
       <div class="card-actions">
         <form action="/api/videos/pin" method="POST" style="flex: 1;">
           <input type="hidden" name="video_id" value="{{ v.id }}">
+          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
           <input type="hidden" name="is_pinned" value="{% if v.is_pinned %}0{% else %}1{% endif %}">
           <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 6px;">
             {% if v.is_pinned %}Entpinnen{% else %}📌 Pinnen{% endif %}
@@ -98,6 +99,7 @@
 
         <form action="/api/videos/delete" method="POST" onsubmit="return confirm('Video wirklich löschen?');">
           <input type="hidden" name="video_id" value="{{ v.id }}">
+          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
           <button type="submit" class="btn btn-danger" style="padding: 6px 12px;">
             🗑️
           </button>
