@@ -6,6 +6,9 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+# Automatic download attempts per video before the poller gives up
+MAX_VIDEO_ATTEMPTS = 3
+
 
 def utc_now_str() -> str:
     """Return current ISO 8601 UTC timestamp."""

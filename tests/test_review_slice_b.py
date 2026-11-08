@@ -128,7 +128,6 @@ def test_b1_retention_deleted_video_is_not_repolled(queue: JobQueue, temp_db: Da
 # --- B2: permanently unavailable videos must not be retried every poll --------------------
 
 
-@pytest.mark.xfail(strict=True, reason="B2: VideoUnavailableError video is re-enqueued")
 def test_b2_unavailable_video_is_not_retried(
     queue: JobQueue, temp_db: Database, tmp_path: Path
 ) -> None:
@@ -151,6 +150,42 @@ def test_b2_unavailable_video_is_not_retried(
     failed = queue.list_jobs(status="failed")
     assert [j.payload.get("video_id") for j in failed] == ["vidB2una01"]
 
+    assert poller.poll_channel(CHANNEL_ID) == []
+
+
+def test_b2_transient_failure_is_retried_after_backoff(
+    queue: JobQueue, temp_db: Database, tmp_path: Path
+) -> None:
+    fake = MagicMock()
+    fake.async_extract_info = AsyncMock(side_effect=RuntimeError("HTTP 503"))
+    worker = BackgroundWorker(
+        queue=queue,
+        downloader_service=fake,
+        layout=JellyfinLayout(media_root=tmp_path / "media"),
+        nfo=NfoGenerator(),
+        database=temp_db,
+    )
+    now = datetime.now(UTC)
+    poller = _poller(queue, temp_db, _feed([("vidB2tmp01", now - timedelta(hours=2))]))
+
+    assert poller.poll_channel(CHANNEL_ID) == ["vidB2tmp01"]
+    assert asyncio.run(worker.process_next_job()) is True
+    with temp_db.connection() as conn:
+        row = conn.execute(
+            "SELECT status, attempts, last_error, next_attempt_at FROM videos"
+            " WHERE id = 'vidB2tmp01'"
+        ).fetchone()
+    assert (row["status"], row["attempts"], row["last_error"]) == ("failed", 1, "HTTP 503")
+    assert row["next_attempt_at"] > _iso(now)
+
+    # backoff not elapsed -> skipped; elapsed -> retried; max attempts reached -> skipped
+    assert poller.poll_channel(CHANNEL_ID) == []
+    with temp_db.connection() as conn:
+        conn.execute("UPDATE videos SET next_attempt_at = ? WHERE id = 'vidB2tmp01'", (_iso(now),))
+    assert poller.poll_channel(CHANNEL_ID) == ["vidB2tmp01"]
+    queue.mark_completed(queue.claim_next_job().id)
+    with temp_db.connection() as conn:
+        conn.execute("UPDATE videos SET attempts = 3 WHERE id = 'vidB2tmp01'")
     assert poller.poll_channel(CHANNEL_ID) == []
 
 

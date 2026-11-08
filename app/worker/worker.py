@@ -2,14 +2,16 @@
 
 import asyncio
 import logging
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from app.db.database import Database, db
+from app.downloader.exceptions import VideoUnavailableError
 from app.downloader.options import DownloadOptions
 from app.downloader.service import YtDlpService, downloader
 from app.jellyfin import JellyfinLayout, NfoGenerator, jellyfin_layout, nfo_generator
-from app.worker.models import Job, utc_now_str
+from app.worker.models import MAX_VIDEO_ATTEMPTS, Job, utc_now_str
 from app.worker.queue import JobQueue
 
 logger = logging.getLogger(__name__)
@@ -92,7 +94,76 @@ class BackgroundWorker:
         except Exception as exc:
             logger.error("Job %s failed: %s", job.id, exc)
             self.queue.mark_failed(job.id, str(exc))
+            if job.type == "download_video":
+                try:
+                    self._record_video_failure(job, exc)
+                except Exception as record_exc:
+                    logger.error("Could not record failure for job %s: %s", job.id, record_exc)
             return True
+
+    def _record_video_failure(self, job: Job, exc: Exception) -> None:
+        """Mark the video row as failed so the poller does not retry it every cycle.
+
+        `VideoUnavailableError` is permanent (no automatic retry). Other errors get an
+        exponential backoff (1h, 4h, ...) until MAX_VIDEO_ATTEMPTS is reached.
+        `next_attempt_at = NULL` means no automatic retry.
+        """
+        payload = job.payload
+        video_id = payload.get("video_id")
+        if not video_id:
+            return  # e.g. quick download by URL: no ID known, nothing to track
+
+        now = datetime.now(UTC)
+        now_str = utc_now_str()
+        with self.db.connection() as conn:
+            row = conn.execute(
+                "SELECT status, attempts FROM videos WHERE id = ?", (video_id,)
+            ).fetchone()
+            if row and row["status"] == "completed":
+                return  # files of an earlier download are still in place
+
+            attempts = (row["attempts"] if row else 0) + 1
+            retry = not isinstance(exc, VideoUnavailableError) and attempts < MAX_VIDEO_ATTEMPTS
+            next_attempt_at = (
+                (now + timedelta(hours=4 ** (attempts - 1))).strftime("%Y-%m-%dT%H:%M:%SZ")
+                if retry
+                else None
+            )
+            if row:
+                conn.execute(
+                    """
+                    UPDATE videos
+                    SET status = 'failed', attempts = ?, last_error = ?,
+                        next_attempt_at = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (attempts, str(exc), next_attempt_at, now_str, video_id),
+                )
+            else:
+                # Minimal row; only possible when the channel is known (FK)
+                channel_id = payload.get("channel_id")
+                conn.execute(
+                    """
+                    INSERT INTO videos (
+                        id, channel_id, title, published_at, status,
+                        attempts, last_error, next_attempt_at, created_at, updated_at
+                    )
+                    SELECT ?, ?, ?, ?, 'failed', ?, ?, ?, ?, ?
+                    WHERE EXISTS (SELECT 1 FROM channels WHERE id = ?)
+                    """,
+                    (
+                        video_id,
+                        channel_id,
+                        payload.get("title") or video_id,
+                        payload.get("published_at") or now_str,
+                        attempts,
+                        str(exc),
+                        next_attempt_at,
+                        now_str,
+                        now_str,
+                        channel_id,
+                    ),
+                )
 
     async def _handle_download_video(self, job: Job) -> None:
         """Execute video download, layout organization, NFO writing, and DB record creation."""
@@ -220,6 +291,9 @@ class BackgroundWorker:
                     thumbnail_path = excluded.thumbnail_path,
                     file_size = excluded.file_size,
                     status = excluded.status,
+                    attempts = 0,
+                    last_error = NULL,
+                    next_attempt_at = NULL,
                     updated_at = excluded.updated_at
                 """,
                 (

@@ -7,6 +7,7 @@ import defusedxml.ElementTree as DefusedET
 import httpx
 
 from app.db.database import Database, db
+from app.worker.models import MAX_VIDEO_ATTEMPTS, utc_now_str
 from app.worker.queue import JobQueue
 
 logger = logging.getLogger(__name__)
@@ -171,6 +172,7 @@ class SubscriptionPoller:
 
         entries = RssFeedParser.parse_feed(content)
         enqueued_ids: list[str] = []
+        now = utc_now_str()
 
         with self.db.connection() as conn:
             cursor = conn.cursor()
@@ -183,8 +185,18 @@ class SubscriptionPoller:
                     logger.debug("Skipping Live Stream: %s (%s)", entry.title, entry.video_id)
                     continue
 
-                # Check if video is already downloaded or in database
-                cursor.execute("SELECT id FROM videos WHERE id = ?", (entry.video_id,))
+                # Skip every known video (completed, deleted, skipped, failed) unless it
+                # is a failed download whose retry backoff has elapsed
+                cursor.execute(
+                    """
+                    SELECT 1 FROM videos
+                    WHERE id = ? AND NOT (
+                        status = 'failed' AND attempts < ?
+                        AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?
+                    )
+                    """,
+                    (entry.video_id, MAX_VIDEO_ATTEMPTS, now),
+                )
                 if cursor.fetchone():
                     continue
 
