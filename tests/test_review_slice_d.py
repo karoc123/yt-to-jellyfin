@@ -246,7 +246,6 @@ def _video_extractions(fake: type[FakeYoutubeDL], video_id: str) -> list[str]:
 # --- D1: metadata fetched only once ---------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="D1: metadata extracted twice per download")
 def test_d1_single_extraction_per_download(
     fake_ydl: type[FakeYoutubeDL], temp_db: Database, media_root: Path
 ) -> None:

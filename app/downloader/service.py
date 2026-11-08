@@ -299,8 +299,13 @@ class YtDlpService:
         url: str,
         options: DownloadOptions | None = None,
         progress_hook: Callable[[dict[str, Any]], None] | None = None,
+        info: dict[str, Any] | None = None,
     ) -> DownloadResult:
-        """Execute full download pipeline (video, subtitles, and thumbnails)."""
+        """Execute full download pipeline (video, subtitles, and thumbnails).
+
+        With `info` (the raw info dict from `extract_info`), the video is not extracted
+        again: yt-dlp processes the given info via `process_ie_result`.
+        """
         opts = options or self.default_options
         output_dir = Path(opts.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -309,7 +314,10 @@ class YtDlpService:
 
         try:
             with yt_dlp.YoutubeDL(ydl_params) as ydl:
-                info = ydl.extract_info(url, download=True)
+                if info:
+                    info = ydl.process_ie_result(info, download=True)
+                else:
+                    info = ydl.extract_info(url, download=True)
                 if not info:
                     raise DownloadFailedError(f"Failed to extract info during download for {url}")
 
@@ -409,9 +417,10 @@ class YtDlpService:
         url: str,
         options: DownloadOptions | None = None,
         progress_hook: Callable[[dict[str, Any]], None] | None = None,
+        info: dict[str, Any] | None = None,
     ) -> DownloadResult:
         """Asynchronously execute download pipeline in a background worker thread."""
-        return await asyncio.to_thread(self.download, url, options, progress_hook)
+        return await asyncio.to_thread(self.download, url, options, progress_hook, info)
 
     @staticmethod
     def import_cookies(

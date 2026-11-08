@@ -198,8 +198,24 @@ class BackgroundWorker:
         sponsorblock_remove = payload.get("sponsorblock_remove", [])
         sponsorblock_mark = payload.get("sponsorblock_mark", [])
 
-        # Step 1: Extract metadata first (channel + publish date/year for Season directory)
-        meta = await self.downloader.async_extract_info(url)
+        # Download options independent of the target path (Payload > Settings)
+        opts_kwargs: dict[str, Any] = {
+            "max_height": max_height,
+            "sponsorblock_remove": sponsorblock_remove,
+            "sponsorblock_mark": sponsorblock_mark,
+        }
+        if format_selector:
+            opts_kwargs["format_selector"] = format_selector
+        if format_sort:
+            opts_kwargs["format_sort"] = format_sort
+        if throttled_rate:
+            opts_kwargs["throttled_rate_bytes"] = int(throttled_rate)
+        # Cookies only when the file exists (no warning spam when none are configured)
+        if settings.cookies_path and Path(settings.cookies_path).is_file():
+            opts_kwargs["cookies_path"] = settings.cookies_path
+
+        # Step 1: Extract metadata once (channel + publish date/year for Season directory)
+        meta = await self.downloader.async_extract_info(url, DownloadOptions(**opts_kwargs))
         channel_id = payload.get("channel_id") or meta.channel_id or "unknown_channel"
         channel_name = payload.get("channel_name") or meta.channel or "Unknown Channel"
         pub_date = meta.upload_date or payload.get("published_at", "") or ""
@@ -222,39 +238,28 @@ class BackgroundWorker:
             video_id=meta.id,
             extension="mp4",
         )
-        base_template = f"{Path(video_filename).stem}.%(ext)s"
 
-        # Step 3: Configure download options with Season destination and format/SponsorBlock
-        opts_kwargs: dict[str, Any] = {
-            "output_dir": season_dir,
-            "output_template": base_template,
-            "max_height": max_height,
-            "sponsorblock_remove": sponsorblock_remove,
-            "sponsorblock_mark": sponsorblock_mark,
-        }
-        if format_selector:
-            opts_kwargs["format_selector"] = format_selector
-        if format_sort:
-            opts_kwargs["format_sort"] = format_sort
-        if throttled_rate:
-            opts_kwargs["throttled_rate_bytes"] = int(throttled_rate)
-        # Cookies only when the file exists (no warning spam when none are configured)
-        if settings.cookies_path and Path(settings.cookies_path).is_file():
-            opts_kwargs["cookies_path"] = settings.cookies_path
-
-        dl_options = DownloadOptions(**opts_kwargs)
+        # Step 3: Target path into the download options
+        dl_options = DownloadOptions(
+            output_dir=season_dir,
+            output_template=f"{Path(video_filename).stem}.%(ext)s",
+            **opts_kwargs,
+        )
 
         # Progress reporting callback
         def _on_progress(update: Any) -> None:
             if hasattr(update, "percentage"):
                 self.queue.update_progress(job.id, int(update.percentage))
 
-        # Step 4: Execute download
-        result = await self.downloader.async_download(
-            url=url,
-            options=dl_options,
-            progress_hook=lambda d: None,  # yt-dlp internal hook
-        )
+        # Step 4: Execute download, reusing the extracted info (no second extraction)
+        download_kwargs: dict[str, Any] = {
+            "url": url,
+            "options": dl_options,
+            "progress_hook": lambda d: None,  # yt-dlp internal hook
+        }
+        if meta.raw_info:
+            download_kwargs["info"] = meta.raw_info
+        result = await self.downloader.async_download(**download_kwargs)
 
         # Step 5: Write episode .nfo companion metadata
         ep_nfo_path = self.layout.get_episode_nfo_path(result.video_path)
