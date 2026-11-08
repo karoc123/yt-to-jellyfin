@@ -546,7 +546,6 @@ def test_g2_library_filter_before_limit(client: TestClient, temp_db: Database) -
 # --- G3: unused get_db dependencies ---------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="G3: endpoints open unused DB connections")
 def test_g3_no_unused_get_db_dependencies() -> None:
     unused = []
     for module in ("actions.py", "views.py"):

@@ -241,7 +241,7 @@ def test_a4_sync_does_not_block_event_loop(
 
         tick_task = asyncio.create_task(ticker())
         await asyncio.sleep(0.02)
-        await actions.sync_single_subscription(channel_id="UCslow0001", db_conn=None)
+        await actions.sync_single_subscription(channel_id="UCslow0001")
         stop.set()
         await tick_task
         return max_gap

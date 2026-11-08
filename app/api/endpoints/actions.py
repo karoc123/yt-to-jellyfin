@@ -40,7 +40,6 @@ async def create_download_job(
     target_library: str | None = Form(None),
     max_height: str | None = Form(None),
     sponsorblock: str | None = Form(None),
-    db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Enqueue a video/playlist download job."""
     queue = JobQueue()
@@ -63,7 +62,6 @@ async def create_download_job(
 async def pin_video(
     video_id: str = Form(...),
     is_pinned: int = Form(...),
-    db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Toggle pin status on a single video."""
     retention_engine.set_pin_status(video_id, bool(is_pinned))
@@ -73,7 +71,6 @@ async def pin_video(
 @router.post("/videos/delete")
 async def delete_single_video(
     video_id: str = Form(...),
-    db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Delete a video and all companion artifacts."""
     retention_engine.delete_video(video_id, force=True)
@@ -83,7 +80,6 @@ async def delete_single_video(
 @router.post("/videos/bulk-delete")
 async def bulk_delete_videos(
     req: BulkDeleteRequest,
-    db_conn=Depends(get_db),
 ) -> dict[str, int]:
     """Bulk delete selected videos."""
     deleted_count = 0
@@ -97,7 +93,6 @@ async def bulk_delete_videos(
 @router.post("/videos/bulk-pin")
 async def bulk_pin_videos(
     req: BulkPinRequest,
-    db_conn=Depends(get_db),
 ) -> dict[str, int]:
     """Bulk pin or unpin selected videos."""
     updated_count = 0
@@ -254,7 +249,6 @@ async def add_subscription(
 @router.post("/subscriptions/sync")
 async def sync_single_subscription(
     channel_id: str = Form(...),
-    db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Trigger manual RSS sync for a channel."""
     queue = JobQueue()
@@ -264,9 +258,7 @@ async def sync_single_subscription(
 
 
 @router.post("/subscriptions/sync-all")
-async def sync_all_subscriptions(
-    db_conn=Depends(get_db),
-) -> RedirectResponse:
+async def sync_all_subscriptions() -> RedirectResponse:
     """Trigger RSS sync for all channels."""
     queue = JobQueue()
     poller = SubscriptionPoller(queue=queue, database=db)
@@ -291,7 +283,6 @@ async def import_subscriptions(
     ta_url: str | None = Form(None),
     ta_token: str | None = Form(None),
     library: str = Form("default"),
-    db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Import subscriptions from OPML/JSON file or TubeArchivist API."""
     migrator = SubscriptionsMigrator(database=db)
