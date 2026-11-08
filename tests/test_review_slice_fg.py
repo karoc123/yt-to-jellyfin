@@ -430,7 +430,6 @@ def test_f5_update_subscription(client: TestClient, temp_db: Database) -> None:
 # --- F6: nav label matches the structure ----------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="F6: nav says 'Abos & Queue', queue is on /")
 def test_f6_nav_label_without_queue(client: TestClient) -> None:
     response = client.get("/")
     texts = [" ".join(link["text"].split()) for link in _parse(response.text).nav_links]
