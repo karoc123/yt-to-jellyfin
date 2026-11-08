@@ -20,8 +20,9 @@ It is built for families and self-hosters who want hassle-free downloads, clean 
 4. **Local Verification Before Push:**
    * Never rely solely on remote GitHub CI.
    * Run `./run-check.sh` locally (`ruff check`, `ruff format --check`, `pytest`) before committing and pushing.
-5. **Tone & Documentation:**
-   * Keep documentation user-centric, honest, and grounded. No corporate marketing fluff.
+5. **Minimal Documentation & Pragmatism (Less is More):**
+   * Write Markdown only where strictly necessary — less is often more.
+   * Avoid creating unnecessary `.md` files or sprawling prose; keep documentation lean, actionable, user-centric, and grounded without corporate marketing fluff.
 
 ---
 
