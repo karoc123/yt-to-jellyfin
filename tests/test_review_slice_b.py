@@ -222,7 +222,6 @@ def test_b3_poller_respects_retention_count(queue: JobQueue, temp_db: Database) 
 # --- B4: scheduler triggers RSS polling and retention -------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="B4: no scheduler module exists")
 def test_b4_scheduler_tick_enqueues_poll_and_retention(queue: JobQueue) -> None:
     """Desired API: `app.worker.scheduler.Scheduler(queue=...)` with a sync `tick()` that
     enqueues one `poll_channels` and one `retention` job (deduplicated)."""
@@ -236,7 +235,6 @@ def test_b4_scheduler_tick_enqueues_poll_and_retention(queue: JobQueue) -> None:
     assert types == ["poll_channels", "retention"]
 
 
-@pytest.mark.xfail(strict=True, reason="B4: lifespan starts no scheduler")
 def test_b4_lifespan_runs_scheduler(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Desired API: module-level `app.main.scheduler` with attribute `interval_seconds`;
     the lifespan starts it and it calls `tick()` periodically."""
@@ -269,7 +267,6 @@ def _worker(queue: JobQueue, temp_db: Database, tmp_path: Path) -> BackgroundWor
     )
 
 
-@pytest.mark.xfail(strict=True, reason="B4: worker cannot run poll_channels jobs")
 def test_b4_worker_runs_poll_channels_job(
     queue: JobQueue, temp_db: Database, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -286,7 +283,6 @@ def test_b4_worker_runs_poll_channels_job(
     assert [j.payload.get("video_id") for j in pending] == ["vidB4poll1"]
 
 
-@pytest.mark.xfail(strict=True, reason="B4: worker cannot run retention jobs")
 def test_b4_worker_runs_retention_job(queue: JobQueue, temp_db: Database, tmp_path: Path) -> None:
     now = datetime.now(UTC)
     with temp_db.connection() as conn:

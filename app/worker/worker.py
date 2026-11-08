@@ -11,7 +11,9 @@ from app.downloader.exceptions import VideoUnavailableError
 from app.downloader.options import DownloadOptions
 from app.downloader.service import YtDlpService, downloader
 from app.jellyfin import JellyfinLayout, NfoGenerator, jellyfin_layout, nfo_generator
+from app.retention.engine import RetentionEngine
 from app.worker.models import MAX_VIDEO_ATTEMPTS, Job, utc_now_str
+from app.worker.poller import SubscriptionPoller
 from app.worker.queue import JobQueue
 
 logger = logging.getLogger(__name__)
@@ -83,6 +85,11 @@ class BackgroundWorker:
         try:
             if job.type == "download_video":
                 await self._handle_download_video(job)
+            elif job.type == "poll_channels":
+                poller = SubscriptionPoller(queue=self.queue, database=self.db)
+                await asyncio.to_thread(poller.poll_all_channels)
+            elif job.type == "retention":
+                await asyncio.to_thread(RetentionEngine(database=self.db).evaluate_all_channels)
             else:
                 logger.warning("Unknown job type: %s", job.type)
                 self.queue.mark_failed(job.id, f"Unknown job type: {job.type}")

@@ -20,16 +20,26 @@ class JobQueue:
         job_type: str,
         payload: dict[str, Any],
         deduplicate_key: str | None = None,
+        unique: bool = False,
     ) -> Job | None:
         """Enqueue a job.
 
         If `deduplicate_key` (e.g. video ID or channel ID) is supplied and a job with
         matching type and deduplicate payload value is already pending or running, returns None.
+        With `unique=True`, any pending or running job of the same type blocks the enqueue.
         """
         job = Job.create(job_type, payload)
 
         with self.db.connection() as conn:
             cursor = conn.cursor()
+
+            if unique:
+                cursor.execute(
+                    "SELECT 1 FROM jobs WHERE type = ? AND status IN ('pending', 'running')",
+                    (job_type,),
+                )
+                if cursor.fetchone():
+                    return None
 
             if deduplicate_key:
                 val = str(payload.get(deduplicate_key, ""))

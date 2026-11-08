@@ -10,9 +10,11 @@ from fastapi.staticfiles import StaticFiles
 from app.api import api_router
 from app.db import db
 from app.worker import BackgroundWorker
+from app.worker.scheduler import Scheduler
 
-# Global background worker instance
+# Global background worker and periodic scheduler (RSS poll + retention)
 worker = BackgroundWorker()
+scheduler = Scheduler(queue=worker.queue)
 
 
 @asynccontextmanager
@@ -22,11 +24,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Ensure worker points to active db instance
     worker.db = db
     worker.queue.db = db
-    # Start background job worker
+    scheduler.queue.db = db
+    # Start background job worker and scheduler
     worker.start()
+    scheduler.start()
     try:
         yield
     finally:
+        await scheduler.stop()
         await worker.stop()
 
 
