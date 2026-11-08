@@ -6,11 +6,32 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.core.config import settings
 from app.db import get_db
 from app.worker.queue import JobQueue
 
 templates_dir = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
+
+# Display labels for the default libraries; other names are shown capitalized
+_LIBRARY_LABELS = {
+    "default": ("📁", "Standard"),
+    "kids": ("🧒", "Kids"),
+    "dokus": ("📚", "Dokus"),
+    "tech": ("💻", "Tech"),
+}
+
+
+def library_options() -> list[dict[str, str]]:
+    """Libraries from settings (LIBRARIES) with icon and label, read at render time."""
+    options = []
+    for name in settings.libraries:
+        icon, label = _LIBRARY_LABELS.get(name, ("📂", name.capitalize()))
+        options.append({"name": name, "icon": icon, "label": label})
+    return options
+
+
+templates.env.globals["library_options"] = library_options
 
 router = APIRouter(tags=["views"])
 

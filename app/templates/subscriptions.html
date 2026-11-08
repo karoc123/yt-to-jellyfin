@@ -41,10 +41,9 @@
       <div>
         <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 2px;">Ziel-Bibliothek:</label>
         <select name="library" class="url-input" style="padding: 6px;">
-          <option value="default" {% if current_lib == 'default' %}selected{% endif %}>Standard</option>
-          <option value="kids" {% if current_lib == 'kids' %}selected{% endif %}>Kids</option>
-          <option value="dokus" {% if current_lib == 'dokus' %}selected{% endif %}>Dokus</option>
-          <option value="tech" {% if current_lib == 'tech' %}selected{% endif %}>Tech</option>
+          {% for lib in library_options() %}
+          <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
+          {% endfor %}
         </select>
       </div>
 
@@ -79,10 +78,9 @@
           Ziel-Bibliothek:
         </label>
         <select name="library" class="url-input" style="padding: 6px;">
-          <option value="default" {% if current_lib == 'default' %}selected{% endif %}>Standard</option>
-          <option value="kids" {% if current_lib == 'kids' %}selected{% endif %}>Kids</option>
-          <option value="dokus" {% if current_lib == 'dokus' %}selected{% endif %}>Dokus</option>
-          <option value="tech" {% if current_lib == 'tech' %}selected{% endif %}>Tech</option>
+          {% for lib in library_options() %}
+          <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
+          {% endfor %}
         </select>
       </div>
     </div>

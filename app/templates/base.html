@@ -17,10 +17,9 @@
       <!-- Library Switcher Pills -->
       <div class="library-switcher" id="lib-switcher">
         <button type="button" class="lib-pill" data-lib="all">🌐 Alle</button>
-        <button type="button" class="lib-pill" data-lib="default">📁 Standard</button>
-        <button type="button" class="lib-pill" data-lib="kids">🧒 Kids</button>
-        <button type="button" class="lib-pill" data-lib="dokus">📚 Dokus</button>
-        <button type="button" class="lib-pill" data-lib="tech">💻 Tech</button>
+        {% for lib in library_options() %}
+        <button type="button" class="lib-pill" data-lib="{{ lib.name }}">{{ lib.icon }} {{ lib.label }}</button>
+        {% endfor %}
       </div>
 
       <nav class="nav-links">

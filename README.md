@@ -24,7 +24,7 @@ You run Jellyfin for your family, and you want selected YouTube channels and vid
   * Writes companion `-thumb.jpg` and channel `poster.jpg` images recognized out-of-the-box.
 * **Mobile-First Family UI:**
   * Zero-login, responsive web frontend designed for phones, tablets, and desktop browsers.
-  * Global library switcher pills (`All`, `Default`, `Kids`, `Dokus`, `Tech`) persisted via browser `localStorage` and `?lib=` query parameter.
+  * Global library switcher pills (`All` plus the folders from `LIBRARIES`, default `default,kids,dokus,tech`) persisted via browser `localStorage` and `?lib=` query parameter.
 * **Quick Download Interface:**
   * Paste a video or playlist URL, pick maximum resolution (e.g. 1080p, 720p, 4K), optionally toggle SponsorBlock segment removal, and view inline queue progress.
 * **Two-Tier Mediathek Browser:**
@@ -92,6 +92,7 @@ Open **`http://<your-server-ip>:8099`** in your browser.
 | `THROTTLED_RATE_BYTES` | *None* | Re-extract a download that drops below N bytes/second (yt-dlp `--throttled-rate`) |
 | `DEFAULT_FORMAT` | *None* | `yt-dlp` format selector (default `bestvideo*+bestaudio/best`) |
 | `DEFAULT_MAX_HEIGHT` | *None* | Maximum video height (e.g. `1080`) when the job does not set one |
+| `LIBRARIES` | `default,kids,dokus,tech` | Comma-separated library folders offered in the UI |
 | `RSS_POLL_INTERVAL` | `900` | Seconds between RSS polls / retention runs |
 | `RETENTION_DAYS` | *None* | Global default: delete unpinned videos older than N days (channel rule wins) |
 | `RETENTION_COUNT` | *None* | Global default: keep only the latest N videos per channel (channel rule wins) |

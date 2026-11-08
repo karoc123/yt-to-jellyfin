@@ -145,7 +145,6 @@ def client(monkeypatch: pytest.MonkeyPatch, temp_db: Database) -> TestClient:
     main_module.app.dependency_overrides.clear()
 
 
-@pytest.mark.xfail(strict=True, reason="C4: libraries hard-coded in templates")
 @pytest.mark.parametrize("path", ["/", "/subscriptions"])
 def test_c4_libraries_from_env(
     monkeypatch: pytest.MonkeyPatch, client: TestClient, path: str
