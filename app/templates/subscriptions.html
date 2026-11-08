@@ -162,13 +162,72 @@
           </button>
         </form>
 
-        <form action="/api/subscriptions/delete" method="POST" onsubmit="return confirm('Unsubscribe?');">
-          <input type="hidden" name="channel_id" value="{{ ch.id }}">
-          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          <button type="submit" class="btn btn-danger btn-sm" aria-label="Unsubscribe" title="Unsubscribe">
-            <span aria-hidden="true">🗑️</span>
-          </button>
-        </form>
+        <button type="button" class="btn btn-danger btn-sm" aria-label="Unsubscribe or delete" title="Unsubscribe or delete" onclick="document.getElementById('del-modal-{{ ch.id }}').showModal()">
+          <span aria-hidden="true">🗑️</span>
+        </button>
+
+        <dialog id="del-modal-{{ ch.id }}" class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h3 class="card-heading">Unsubscribe / Delete Channel</h3>
+              <p class="text-muted-sm"><strong>{{ ch.name }}</strong></p>
+            </div>
+
+            {% if ch.video_count and ch.video_count > 0 %}
+            <div class="dialog-box">
+              <span class="dialog-box-title">Option 1: Unsubscribe only (Recommended)</span>
+              <p class="text-muted-xs">
+                Stop automatic downloads. All <strong>{{ ch.video_count }}</strong> archived video(s) remain in your library.
+              </p>
+              <form action="/api/subscriptions/delete" method="POST">
+                <input type="hidden" name="channel_id" value="{{ ch.id }}">
+                <input type="hidden" name="mode" value="unsubscribe">
+                {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
+                <button type="submit" class="btn btn-sm btn-block">
+                  <span aria-hidden="true">⏸️</span> Unsubscribe Only (Keep Videos)
+                </button>
+              </form>
+            </div>
+
+            <div class="form-divider"></div>
+
+            <div class="dialog-box">
+              <span class="dialog-box-title">Option 2: Delete channel &amp; all videos</span>
+              <p class="text-muted-xs">
+                Permanently delete the channel and all {{ ch.video_count }} video(s) from your library.
+              </p>
+              <form action="/api/subscriptions/delete" method="POST">
+                <input type="hidden" name="channel_id" value="{{ ch.id }}">
+                <input type="hidden" name="mode" value="delete_all">
+                {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
+                <label class="checkbox-label">
+                  <input type="checkbox" name="delete_files" value="1">
+                  Also delete media files from disk
+                </label>
+                <button type="submit" class="btn btn-danger btn-sm btn-block" onclick="return confirm('Really delete this channel and all videos?');">
+                  <span aria-hidden="true">🗑️</span> Delete Channel &amp; All Videos
+                </button>
+              </form>
+            </div>
+            {% else %}
+            <p class="text-muted-sm">
+              No videos found in your library for this channel. Remove subscription?
+            </p>
+            <form action="/api/subscriptions/delete" method="POST">
+              <input type="hidden" name="channel_id" value="{{ ch.id }}">
+              <input type="hidden" name="mode" value="delete_all">
+              {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
+              <button type="submit" class="btn btn-danger btn-sm btn-block">
+                <span aria-hidden="true">🗑️</span> Remove Subscription
+              </button>
+            </form>
+            {% endif %}
+
+            <div class="modal-cancel-wrapper">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="this.closest('dialog').close()">Cancel</button>
+            </div>
+          </div>
+        </dialog>
       </div>
     </div>
     {% else %}

@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import re
+import shutil
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -424,11 +425,52 @@ async def sync_all_subscriptions(
 @router.post("/subscriptions/delete")
 async def delete_subscription(
     channel_id: str = Form(...),
+    mode: str = Form("delete_all"),
+    delete_files: str | None = Form(None),
     lib: str | None = Form(None),
     db_conn=Depends(get_db),
 ) -> RedirectResponse:
-    """Delete a channel subscription."""
+    """Delete a channel subscription or unsubscribe while keeping videos."""
     cursor = db_conn.cursor()
+    cursor.execute(
+        "SELECT id, name, folder_name, library FROM channels WHERE id = ?",
+        (channel_id,),
+    )
+    ch = cursor.fetchone()
+    if not ch:
+        return redirect_to("/subscriptions", lib, msg="sub_not_found")
+
+    cursor.execute(
+        "SELECT COUNT(*) FROM videos WHERE channel_id = ? AND status = 'completed'",
+        (channel_id,),
+    )
+    video_count = cursor.fetchone()[0]
+
+    # Mode 1: "unsubscribe" - disable automatic downloads, keep videos and channel
+    if mode == "unsubscribe" and video_count > 0:
+        cursor.execute(
+            """
+            UPDATE channels
+            SET auto_download = 0, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+            WHERE id = ?
+            """,
+            (channel_id,),
+        )
+        return redirect_to("/subscriptions", lib, msg="sub_unsubscribed")
+
+    # Mode 2: "delete_all" (or unsubscribe when 0 videos exist)
+    if delete_files == "1":
+        ch_name = ch["folder_name"] or ch["name"]
+        ch_lib = ch["library"] or "default"
+        ch_dir = jellyfin_layout.get_channel_dir(ch_name, library=ch_lib)
+        try:
+            media_root_resolved = Path(settings.media_dir).resolve()
+            if ch_dir.resolve().is_relative_to(media_root_resolved) and ch_dir.exists():
+                shutil.rmtree(ch_dir, ignore_errors=True)
+                logger.info("Deleted channel directory from disk: %s", ch_dir)
+        except Exception as exc:
+            logger.warning("Error deleting channel directory %s: %s", ch_dir, exc)
+
     cursor.execute("DELETE FROM channels WHERE id = ?", (channel_id,))
     return redirect_to("/subscriptions", lib, msg="sub_deleted")
 

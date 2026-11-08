@@ -204,6 +204,99 @@ def test_subscriptions_flow(test_client: TestClient, tmp_path: Path) -> None:
         assert cursor.fetchone()[0] == 0
 
 
+def test_subscription_unsubscribe_preserves_videos(test_client: TestClient, tmp_path: Path) -> None:
+    """Unsubscribing from a channel with videos keeps channel and videos (auto_download=0)."""
+    test_db = Database(tmp_path / "web_test.db")
+    with test_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO channels (id, name, url, folder_name, library, auto_download)
+            VALUES ('UCkeep', 'Keep', 'https://youtube.com/@keep', 'Keep', 'default', 1)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO videos (id, channel_id, title, published_at, status)
+            VALUES ('vid_keep_1', 'UCkeep', 'Keep This Video', '2026-11-08', 'completed')
+            """
+        )
+
+    # Post unsubscribe mode
+    res = test_client.post(
+        "/api/subscriptions/delete",
+        data={"channel_id": "UCkeep", "mode": "unsubscribe"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+
+    # Channel still exists, but auto_download is 0
+    with test_db.connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT auto_download FROM channels WHERE id = 'UCkeep'")
+        row = cursor.fetchone()
+        assert row is not None
+        assert row["auto_download"] == 0
+
+        # Video is preserved
+        cursor.execute("SELECT COUNT(*) FROM videos WHERE id = 'vid_keep_1'")
+        assert cursor.fetchone()[0] == 1
+
+    # Channel is no longer shown under Active Subscriptions (/subscriptions)
+    res_subs = test_client.get("/subscriptions")
+    assert "Keep" not in res_subs.text
+
+    # But channel is still visible in the Library (/browser)
+    res_browser = test_client.get("/browser")
+    assert "Keep" in res_browser.text
+
+
+def test_subscription_delete_all_removes_channel_and_videos(
+    test_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """delete_all mode removes channel and cascades to videos and optionally removes files."""
+    from app.core import config
+
+    media_dir = tmp_path / "media"
+    ch_dir = media_dir / "default" / "Purge Channel"
+    ch_dir.mkdir(parents=True, exist_ok=True)
+    dummy_file = ch_dir / "video.mp4"
+    dummy_file.write_bytes(b"data")
+    monkeypatch.setattr(config.settings, "media_dir", media_dir)
+
+    test_db = Database(tmp_path / "web_test.db")
+    with test_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO channels (id, name, url, folder_name, library, auto_download)
+            VALUES ('UCpurge', 'Purge', 'https://youtube.com/@purge', 'Purge Channel', 'default', 1)
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO videos (id, channel_id, title, published_at, status)
+            VALUES ('vid_purge_1', 'UCpurge', 'Purge Video', '2026-11-08', 'completed')
+            """
+        )
+
+    res = test_client.post(
+        "/api/subscriptions/delete",
+        data={"channel_id": "UCpurge", "mode": "delete_all", "delete_files": "1"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+
+    # Channel and video deleted from DB
+    with test_db.connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM channels WHERE id = 'UCpurge'")
+        assert cursor.fetchone()[0] == 0
+        cursor.execute("SELECT COUNT(*) FROM videos WHERE id = 'vid_purge_1'")
+        assert cursor.fetchone()[0] == 0
+
+    # Directory was deleted from disk
+    assert not ch_dir.exists()
+
+
 def test_subscriptions_import_endpoint(test_client: TestClient, tmp_path: Path) -> None:
     """Test importing subscriptions via file upload."""
     opml_content = b"""<?xml version="1.0" encoding="UTF-8"?>

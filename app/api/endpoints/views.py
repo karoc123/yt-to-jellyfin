@@ -70,6 +70,8 @@ FLASH_MESSAGES = {
     "sub_failed": ("alert", "Channel not found. Please check URL, @handle, or ID."),
     "sub_updated": ("status", "Subscription saved."),
     "sub_deleted": ("status", "Subscription removed."),
+    "sub_unsubscribed": ("status", "Subscription ended. Videos kept in library."),
+    "sub_not_found": ("alert", "Subscription not found."),
     "synced": ("status", "Synced: {n} new video(s) queued."),
     "imported": ("status", "Import complete: {n} channel(s) imported."),
     "import_missing": ("alert", "Please provide a file or TubeArchivist URL and token."),
@@ -274,13 +276,18 @@ async def view_subscriptions(
 ) -> HTMLResponse:
     """Channel subscriptions and queue management view."""
     cursor = db_conn.cursor()
+    query = """
+        SELECT c.*, COUNT(v.id) AS video_count
+        FROM channels c
+        LEFT JOIN videos v ON v.channel_id = c.id AND v.status = 'completed'
+        WHERE c.auto_download = 1
+    """
+    params = []
     if lib and lib != "all":
-        cursor.execute(
-            "SELECT * FROM channels WHERE library = ? ORDER BY name ASC",
-            (lib,),
-        )
-    else:
-        cursor.execute("SELECT * FROM channels ORDER BY name ASC")
+        query += " AND c.library = ?"
+        params.append(lib)
+    query += " GROUP BY c.id ORDER BY c.name ASC"
+    cursor.execute(query, params)
 
     channels = [dict(r) for r in cursor.fetchall()]
 
