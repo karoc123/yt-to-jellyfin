@@ -233,6 +233,15 @@ class BackgroundWorker:
             channel_name = entry.get("channel") or entry.get("uploader")
             if channel_name:
                 payload["channel_name"] = channel_name
+            thumb = entry.get("thumbnail")
+            if not thumb and entry.get("thumbnails"):
+                thumbs = entry["thumbnails"]
+                if isinstance(thumbs, list) and thumbs:
+                    thumb = thumbs[-1].get("url")
+            if not thumb and video_id:
+                thumb = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+            if thumb:
+                payload["thumbnail"] = thumb
             if self.queue.enqueue("download_video", payload, deduplicate_key="video_id"):
                 count += 1
         return count
@@ -309,9 +318,25 @@ class BackgroundWorker:
         # Step 1: Extract metadata once (channel + publish date/year for Season directory)
         meta = await self.downloader.async_extract_info(url, DownloadOptions(**opts_kwargs))
         if meta.raw_info.get("_type") in PLAYLIST_TYPES or "entries" in meta.raw_info:
+            if meta.title and payload.get("title") != meta.title:
+                payload["title"] = meta.title
+                self.queue.update_payload(job.id, {"title": meta.title})
             count = self._enqueue_playlist_entries(job, meta.raw_info)
             logger.info("Playlist job %s fanned out into %d video job(s)", job.id, count)
             return
+
+        meta_updates: dict[str, Any] = {}
+        if meta.title and payload.get("title") != meta.title:
+            meta_updates["title"] = meta.title
+        if meta.thumbnail_url and payload.get("thumbnail") != meta.thumbnail_url:
+            meta_updates["thumbnail"] = meta.thumbnail_url
+        if meta.id and payload.get("video_id") != meta.id:
+            meta_updates["video_id"] = meta.id
+        if meta.channel and payload.get("channel_name") != meta.channel:
+            meta_updates["channel_name"] = meta.channel
+        if meta_updates:
+            payload.update(meta_updates)
+            self.queue.update_payload(job.id, meta_updates)
 
         channel_id = payload.get("channel_id") or meta.channel_id or "unknown_channel"
         channel_name = payload.get("channel_name") or meta.channel or "Unknown Channel"
@@ -406,14 +431,15 @@ class BackgroundWorker:
         )
 
         # Step 6: Upsert video record in database
+        auto_download = 1 if payload.get("auto_download") else 0
         with self.db.connection() as conn:
-            # Check or create channel if not present
+            # Check or create channel if not present (never auto-subscribe from one-off downloads)
             conn.execute(
                 """
                 INSERT OR IGNORE INTO channels (
-                    id, name, url, folder_name, library, created_at, updated_at
+                    id, name, url, folder_name, library, auto_download, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     channel_id,
@@ -421,6 +447,7 @@ class BackgroundWorker:
                     meta.channel_url or f"https://www.youtube.com/channel/{channel_id}",
                     channel_name,
                     library,
+                    auto_download,
                     now,
                     now,
                 ),

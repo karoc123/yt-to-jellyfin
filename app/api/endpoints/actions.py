@@ -2,11 +2,13 @@
 
 import asyncio
 import logging
+import os
 import re
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
+import httpx
 from fastapi import (
     APIRouter,
     Depends,
@@ -54,6 +56,50 @@ def redirect_to(path: str, lib: str | None = None, **params: Any) -> RedirectRes
     return RedirectResponse(f"{path}?{urlencode(query)}" if query else path, status_code=303)
 
 
+_YT_ID_RE = re.compile(
+    r"(?:v=|\/shorts\/|\/embed\/|\/live\/|youtu\.be\/|\/v\/|^)([a-zA-Z0-9_-]{11})(?:[?&/]|$|\s)"
+)
+
+
+def extract_youtube_video_id(url: str) -> str | None:
+    """Extract 11-char YouTube video ID if URL looks like a YouTube video."""
+    m = _YT_ID_RE.search(url.strip())
+    return m.group(1) if m else None
+
+
+async def fetch_youtube_oembed(
+    url: str, timeout: float = 1.0, client: httpx.AsyncClient | None = None
+) -> dict[str, str]:
+    """Fetch video metadata (title, author, thumbnail) via oEmbed without blocking long."""
+    if os.environ.get("PYTEST_CURRENT_TEST") and client is None:
+        return {}
+    try:
+        if client is not None:
+            resp = await client.get(
+                "https://www.youtube.com/oembed",
+                params={"url": url, "format": "json"},
+            )
+        else:
+            async with httpx.AsyncClient(timeout=timeout) as ac:
+                resp = await ac.get(
+                    "https://www.youtube.com/oembed",
+                    params={"url": url, "format": "json"},
+                )
+        if resp.status_code == 200:
+            data = resp.json()
+            result: dict[str, str] = {}
+            if data.get("title"):
+                result["title"] = str(data["title"])
+            if data.get("author_name"):
+                result["channel_name"] = str(data["author_name"])
+            if data.get("thumbnail_url"):
+                result["thumbnail"] = str(data["thumbnail_url"])
+            return result
+    except Exception:
+        pass
+    return {}
+
+
 @router.post("/downloads")
 async def create_download_job(
     url: str = Form(...),
@@ -66,7 +112,7 @@ async def create_download_job(
     queue = JobQueue()
     chosen_lib = target_library or library or "default"
 
-    payload = {
+    payload: dict[str, Any] = {
         "url": url,
         "library": chosen_lib,
     }
@@ -75,6 +121,16 @@ async def create_download_job(
     if sponsorblock:
         cats = settings_service.get_setting("sponsorblock_categories", "sponsor,intro")
         payload["sponsorblock_remove"] = [c.strip() for c in cats.split(",") if c.strip()]
+
+    video_id = extract_youtube_video_id(url)
+    if video_id:
+        payload["video_id"] = video_id
+        payload["thumbnail"] = f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg"
+
+    if "youtube.com" in url or "youtu.be" in url:
+        oembed = await fetch_youtube_oembed(url)
+        if oembed:
+            payload.update(oembed)
 
     queue.enqueue("download_video", payload)
     return redirect_to("/", chosen_lib, msg="download_queued")

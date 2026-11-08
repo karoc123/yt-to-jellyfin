@@ -16,9 +16,9 @@ LIBRARY_NAME_PATTERN = re.compile(r"^[a-z0-9_-]{1,32}$")
 
 # Default label/icon mappings for initial seeding and fallback
 _DEFAULT_LIBRARY_METADATA = {
-    "default": ("📁", "Standard"),
+    "default": ("📁", "Default"),
     "kids": ("🧒", "Kids"),
-    "dokus": ("📚", "Dokus"),
+    "dokus": ("📚", "Documentaries"),
     "tech": ("💻", "Tech"),
 }
 
@@ -187,12 +187,12 @@ class SettingsService:
         if not LIBRARY_NAME_PATTERN.match(clean_name):
             return (
                 False,
-                "Bibliotheksname darf nur 1-32 Kleinbuchstaben, "
-                "Ziffern, Bindestrich oder Unterstrich enthalten.",
+                "Library name must contain only 1-32 lowercase letters, "
+                "numbers, hyphens, or underscores.",
             )
 
         if clean_name in ("all", "api"):
-            return False, f"Der Name '{clean_name}' ist reserviert."
+            return False, f"The name '{clean_name}' is reserved."
 
         if not clean_label:
             clean_label = clean_name.capitalize()
@@ -202,22 +202,22 @@ class SettingsService:
                 cursor = conn.cursor()
                 cursor.execute("SELECT 1 FROM libraries WHERE name = ?", (clean_name,))
                 if cursor.fetchone():
-                    return False, f"Bibliothek '{clean_name}' existiert bereits."
+                    return False, f"Library '{clean_name}' already exists."
 
                 conn.execute(
                     "INSERT INTO libraries (name, label, icon) VALUES (?, ?, ?)",
                     (clean_name, clean_label, clean_icon),
                 )
-            return True, f"Bibliothek '{clean_label}' erfolgreich angelegt."
+            return True, f"Library '{clean_label}' created successfully."
         except Exception as exc:
             logger.error("Failed to add library: %s", exc)
-            return False, f"Fehler beim Anlegen: {exc}"
+            return False, f"Failed to create library: {exc}"
 
     def delete_library(self, name: str) -> tuple[bool, str]:
         """Delete a library if not in use and not the default library."""
         clean_name = name.strip().lower()
         if clean_name == "default":
-            return False, "Die Standard-Bibliothek ('default') kann nicht gelöscht werden."
+            return False, "The default library ('default') cannot be deleted."
 
         try:
             with self.db.connection() as conn:
@@ -227,18 +227,18 @@ class SettingsService:
                 if row and row[0] > 0:
                     return (
                         False,
-                        f"Bibliothek '{clean_name}' enthält noch {row[0]} Kanal/Kanäle "
-                        "und kann nicht gelöscht werden.",
+                        f"Library '{clean_name}' still contains {row[0]} channel(s) "
+                        "and cannot be deleted.",
                     )
 
                 cursor.execute("DELETE FROM libraries WHERE name = ?", (clean_name,))
                 if cursor.rowcount == 0:
-                    return False, f"Bibliothek '{clean_name}' wurde nicht gefunden."
+                    return False, f"Library '{clean_name}' was not found."
 
-            return True, f"Bibliothek '{clean_name}' erfolgreich gelöscht."
+            return True, f"Library '{clean_name}' deleted successfully."
         except Exception as exc:
             logger.error("Failed to delete library: %s", exc)
-            return False, f"Fehler beim Löschen: {exc}"
+            return False, f"Failed to delete library: {exc}"
 
 
 # Global settings service instance
@@ -253,7 +253,7 @@ async def test_jellyfin_connection(url: str, api_key: str) -> tuple[bool, str]:
     clean_url = url.strip().rstrip("/")
     clean_key = api_key.strip()
     if not clean_url:
-        return False, "Keine Jellyfin Server URL angegeben."
+        return False, "No Jellyfin server URL provided."
 
     test_endpoint = f"{clean_url}/System/Info"
     headers = {"X-Emby-Token": clean_key} if clean_key else {}
@@ -263,17 +263,17 @@ async def test_jellyfin_connection(url: str, api_key: str) -> tuple[bool, str]:
             if resp.status_code == 200:
                 data = resp.json()
                 server_name = data.get("ServerName", "Jellyfin")
-                version = data.get("Version", "unbekannt")
-                return True, f"Verbindung erfolgreich! Server: {server_name} (v{version})"
+                version = data.get("Version", "unknown")
+                return True, f"Connection successful! Server: {server_name} (v{version})"
             elif resp.status_code in (401, 403):
                 return (
                     False,
-                    f"Authentifizierung fehlgeschlagen (HTTP {resp.status_code}). API-Key prüfen.",
+                    f"Authentication failed (HTTP {resp.status_code}). Check API key.",
                 )
             else:
-                return False, f"Jellyfin meldet HTTP-Status {resp.status_code}."
+                return False, f"Jellyfin returned HTTP status {resp.status_code}."
     except Exception as exc:
-        return False, f"Verbindung fehlgeschlagen: {exc}"
+        return False, f"Connection failed: {exc}"
 
 
 async def notify_jellyfin_refresh(

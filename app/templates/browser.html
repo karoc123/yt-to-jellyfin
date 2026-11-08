@@ -1,25 +1,25 @@
 {% extends "base.html" %}
 
-{% block title %}Mediathek - yt-to-jellyfin{% endblock %}
+{% block title %}Library - yt-to-jellyfin{% endblock %}
 
 {% block content %}
 <div class="page-header">
   <div>
-    <h2 class="page-title">Mediathek Übersicht</h2>
+    <h2 class="page-title">Library Overview</h2>
     <p class="text-muted-sm">
       {% if active_channel %}
-        <a href="/browser{% if current_lib and current_lib != 'all' %}?lib={{ current_lib }}{% endif %}" class="back-link">&larr; Zurück zu allen Kanälen</a> &bull; Kanal: <strong>{{ active_channel.name }}</strong>
+        <a href="/browser{% if current_lib and current_lib != 'all' %}?lib={{ current_lib }}{% endif %}" class="back-link">&larr; Back to all channels</a> &bull; Channel: <strong>{{ active_channel.name }}</strong>
       {% else %}
-        Kanäle und Videos sortiert nach Mediathek
+        Channels and videos organized by library
       {% endif %}
     </p>
   </div>
 
   {% if active_channel and videos %}
   <div class="btn-group">
-    <button type="button" class="btn btn-secondary" onclick="selectAllVideos(false)">Alle auswählen</button>
-    <button type="button" class="btn btn-secondary" onclick="selectAllVideos(true)">Nur Ungepinnte</button>
-    <button type="button" class="btn btn-secondary" onclick="deselectAllVideos()">Auswahl aufheben</button>
+    <button type="button" class="btn btn-secondary" onclick="selectAllVideos(false)">Select all</button>
+    <button type="button" class="btn btn-secondary" onclick="selectAllVideos(true)">Only unpinned</button>
+    <button type="button" class="btn btn-secondary" onclick="deselectAllVideos()">Deselect all</button>
   </div>
   {% endif %}
 </div>
@@ -46,7 +46,7 @@
   </a>
   {% else %}
   <div class="empty-state">
-    Keine Kanäle in dieser Bibliothek gefunden.
+    No channels found in this library.
   </div>
   {% endfor %}
 </div>
@@ -56,8 +56,8 @@
 <form action="/browser" method="GET" class="search-form" role="search">
   <input type="hidden" name="channel_id" value="{{ active_channel.id }}">
   {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-  <input type="search" name="q" value="{{ q }}" placeholder="Titel durchsuchen..." aria-label="Titel durchsuchen" class="url-input input-sm">
-  <button type="submit" class="btn btn-secondary btn-sm">Suchen</button>
+  <input type="search" name="q" value="{{ q }}" placeholder="Search titles..." aria-label="Search titles" class="url-input input-sm">
+  <button type="submit" class="btn btn-secondary btn-sm">Search</button>
 </form>
 
 <div class="grid">
@@ -68,7 +68,7 @@
       <img src="/api/media/thumb?video_id={{ v.id }}" alt="{{ v.title }}" class="card-thumb" loading="lazy">
       {% else %}
       <div class="card-thumb card-thumb-placeholder">
-        Kein Vorschaubild
+        No thumbnail
       </div>
       {% endif %}
 
@@ -78,13 +78,13 @@
           class="video-checkbox"
           data-video-id="{{ v.id }}"
           data-pinned="{{ v.is_pinned }}"
-          aria-label="Video auswählen: {{ v.title }}"
+          aria-label="Select video: {{ v.title }}"
           onchange="toggleSelectVideo(this)"
         >
       </label>
 
       {% if v.is_pinned %}
-      <span class="badge badge-pinned badge-corner"><span aria-hidden="true">📌</span> Gepinnt</span>
+      <span class="badge badge-pinned badge-corner"><span aria-hidden="true">📌</span> Pinned</span>
       {% endif %}
     </div>
 
@@ -92,7 +92,7 @@
       <span class="card-title">{{ v.title }}</span>
       <div class="card-meta">
         <span>{{ v.published_at[:10] }}</span>
-        <span>{{ (v.duration / 60)|round|int }} Min.</span>
+        <span>{{ (v.duration / 60)|round|int }} min</span>
       </div>
 
       <div class="card-actions">
@@ -101,14 +101,14 @@
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
           <input type="hidden" name="is_pinned" value="{% if v.is_pinned %}0{% else %}1{% endif %}">
           <button type="submit" class="btn btn-secondary btn-sm btn-block">
-            {% if v.is_pinned %}Entpinnen{% else %}<span aria-hidden="true">📌</span> Pinnen{% endif %}
+            {% if v.is_pinned %}Unpin{% else %}<span aria-hidden="true">📌</span> Pin{% endif %}
           </button>
         </form>
 
-        <form action="/api/videos/delete" method="POST" onsubmit="return confirm('Video wirklich löschen?');">
+        <form action="/api/videos/delete" method="POST" onsubmit="return confirm('Really delete video?');">
           <input type="hidden" name="video_id" value="{{ v.id }}">
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          <button type="submit" class="btn btn-danger btn-sm" aria-label="Video löschen" title="Video löschen">
+          <button type="submit" class="btn btn-danger btn-sm" aria-label="Delete video" title="Delete video">
             <span aria-hidden="true">🗑️</span>
           </button>
         </form>
@@ -117,26 +117,26 @@
   </div>
   {% else %}
   <div class="empty-state">
-    {% if q %}Keine Videos zu „{{ q }}“ gefunden.{% else %}Keine Videos für diesen Kanal vorhanden.{% endif %}
+    {% if q %}No videos found matching "{{ q }}".{% else %}No videos available for this channel.{% endif %}
   </div>
   {% endfor %}
 </div>
 
 {% if pagination.pages > 1 %}
-<nav class="pagination" aria-label="Seiten">
-  {% if pagination.prev_url %}<a href="{{ pagination.prev_url }}" class="btn btn-secondary btn-sm" rel="prev">&larr; Zurück</a>{% endif %}
-  <span class="text-muted-sm">Seite {{ pagination.page }} von {{ pagination.pages }} ({{ pagination.total }} Videos)</span>
-  {% if pagination.next_url %}<a href="{{ pagination.next_url }}" class="btn btn-secondary btn-sm" rel="next">Weiter &rarr;</a>{% endif %}
+<nav class="pagination" aria-label="Pages">
+  {% if pagination.prev_url %}<a href="{{ pagination.prev_url }}" class="btn btn-secondary btn-sm" rel="prev">&larr; Previous</a>{% endif %}
+  <span class="text-muted-sm">Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} videos)</span>
+  {% if pagination.next_url %}<a href="{{ pagination.next_url }}" class="btn btn-secondary btn-sm" rel="next">Next &rarr;</a>{% endif %}
 </nav>
 {% endif %}
 
 <!-- Floating Bulk Action Bar -->
 <div id="bulk-bar" class="bulk-bar" hidden>
-  <span id="bulk-count" class="bulk-count" aria-live="polite">0 Videos ausgewählt</span>
+  <span id="bulk-count" class="bulk-count" aria-live="polite">0 videos selected</span>
   <div class="btn-group">
-    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(true)"><span aria-hidden="true">📌</span> Pinnen</button>
-    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(false)">Entpinnen</button>
-    <button type="button" class="btn btn-danger" onclick="bulkDeleteVideos()"><span aria-hidden="true">🗑️</span> Löschen</button>
+    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(true)"><span aria-hidden="true">📌</span> Pin</button>
+    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(false)">Unpin</button>
+    <button type="button" class="btn btn-danger" onclick="bulkDeleteVideos()"><span aria-hidden="true">🗑️</span> Delete</button>
   </div>
 </div>
 {% endif %}

@@ -24,15 +24,15 @@ Certain YouTube videos require authentication to download:
 
 You do not need to edit `docker-compose.yml` or mount extra files to use cookies.
 
-1. Open the Web UI and navigate to **Einstellungen** (`/settings`).
-2. Under **YouTube-Authentifizierung (Cookies)**:
+1. Open the Web UI and navigate to **Settings** (`/settings`).
+2. Under **YouTube Authentication (Cookies)**:
    * **Option A:** Upload your exported `cookies.txt` file directly.
    * **Option B:** Open your `cookies.txt`, copy its contents, and paste them into the textarea.
-3. Click **Cookies speichern**.
+3. Click **Save Cookies**.
 
 The application validates the Netscape format and saves the cookies directly to `/data/cookies.txt` with restricted permissions (`0600`). Because `./data:/data` is already mounted as a persistent volume in Docker Compose, the cookies persist across container updates and restarts automatically.
 
-To remove saved cookies, click **Gespeicherte Cookies löschen** on the same settings page.
+To remove saved cookies, click **Delete saved cookies** on the same settings page.
 
 ---
 

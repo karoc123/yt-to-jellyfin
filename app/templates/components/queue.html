@@ -2,49 +2,73 @@
 {% set queue_qs = '?lib=' ~ (current_lib|urlencode) if current_lib and current_lib != 'all' else '' %}
 <section id="queue"{% if queue_active %} hx-get="/partials/queue{{ queue_qs }}" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
   <div class="section-header">
-    <h3 class="section-title">Aktuelle Warteschlange</h3>
-    <span class="text-muted-sm">{{ jobs|length }} Auftrag / Aufträge</span>
+    <h3 class="section-title">Current Queue</h3>
+    <span class="text-muted-sm">{{ jobs|length }} Job(s)</span>
   </div>
 
   {% if jobs %}
   <div class="grid">
     {% for job in jobs %}
     <div class="card job-card">
-      <div class="card-head">
-        <span class="card-title">{{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}</span>
-        <span class="badge badge-status-{{ job.status }}">{{ job_status_labels.get(job.status, job.status) }}</span>
+      {% set thumb = job.payload.thumbnail or job.payload.thumbnail_url %}
+      {% if thumb %}
+      <div class="card-media">
+        <img src="{{ thumb }}" alt="{{ job.payload.title or 'Thumbnail' }}" class="card-thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.parentElement.style.display='none';">
       </div>
-
-      <div class="progress-bar-container">
-        <div class="progress-bar-fill" style="width: {{ job.progress }}%;"></div>
-      </div>
-
-      <div class="card-meta">
-        <span>{{ job.progress }}%</span>
-        <span>Bibliothek: {{ job.payload.library or 'default' }}</span>
-      </div>
-
-      {% if job.status == 'failed' and job.error_message %}
-      <p class="job-error">{{ job.error_message }}</p>
       {% endif %}
 
-      {% if job.status in ('failed', 'cancelled', 'pending') %}
-      {% set job_action = 'cancel' if job.status == 'pending' else 'retry' %}
-      <form action="/api/jobs/{{ job.id }}/{{ job_action }}" method="POST"
-            hx-post="/api/jobs/{{ job.id }}/{{ job_action }}" hx-target="#queue" hx-swap="outerHTML"
-            class="form-actions">
-        {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-        {% if job_action == 'retry' %}
-        <button type="submit" class="btn btn-secondary btn-sm">Erneut versuchen</button>
-        {% else %}
-        <button type="submit" class="btn btn-danger btn-sm">Abbrechen</button>
+      <div class="card-body">
+        <div class="card-head">
+          <span class="card-title" title="{{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}">
+            {{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}
+          </span>
+          <span class="badge badge-status-{{ job.status }}">{{ job_status_labels.get(job.status, job.status) }}</span>
+        </div>
+
+        {% if job.payload.channel_name or (job.payload.title and job.payload.url) %}
+        <div class="card-meta">
+          {% if job.payload.channel_name %}
+          <span>{{ job.payload.channel_name }}</span>
+          {% else %}
+          <span></span>
+          {% endif %}
+          {% if job.payload.title and job.payload.url %}
+          <a href="{{ job.payload.url }}" target="_blank" rel="noopener noreferrer" class="queue-link" title="{{ job.payload.url }}">Source ↗</a>
+          {% endif %}
+        </div>
         {% endif %}
-      </form>
-      {% endif %}
+
+        <div class="progress-bar-container">
+          <div class="progress-bar-fill" style="width: {{ job.progress }}%;"></div>
+        </div>
+
+        <div class="card-meta">
+          <span>{{ job.progress }}%</span>
+          <span>Library: {{ job.payload.library or 'default' }}</span>
+        </div>
+
+        {% if job.status == 'failed' and job.error_message %}
+        <p class="job-error">{{ job.error_message }}</p>
+        {% endif %}
+
+        {% if job.status in ('failed', 'cancelled', 'pending') %}
+        {% set job_action = 'cancel' if job.status == 'pending' else 'retry' %}
+        <form action="/api/jobs/{{ job.id }}/{{ job_action }}" method="POST"
+              hx-post="/api/jobs/{{ job.id }}/{{ job_action }}" hx-target="#queue" hx-swap="outerHTML"
+              class="form-actions">
+          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
+          {% if job_action == 'retry' %}
+          <button type="submit" class="btn btn-secondary btn-sm">Retry</button>
+          {% else %}
+          <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
+          {% endif %}
+        </form>
+        {% endif %}
+      </div>
     </div>
     {% endfor %}
   </div>
   {% else %}
-  <div class="empty-state">Keine aktiven Downloads in der Warteschlange.</div>
+  <div class="empty-state">No active downloads in the queue.</div>
   {% endif %}
 </section>

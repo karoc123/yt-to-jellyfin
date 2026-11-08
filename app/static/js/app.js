@@ -15,7 +15,7 @@ function updateBulkBar() {
 
   const count = selectedVideoIds.size;
   if (count > 0) {
-    countEl.textContent = `${count} Video${count > 1 ? "s" : ""} ausgewählt`;
+    countEl.textContent = `${count} video${count > 1 ? "s" : ""} selected`;
   }
   bar.hidden = count === 0;
 }
@@ -53,7 +53,7 @@ function deselectAllVideos() {
 
 async function bulkDeleteVideos() {
   if (selectedVideoIds.size === 0) return;
-  if (!confirm(`Möchtest du wirklich ${selectedVideoIds.size} Video(s) unwiderruflich löschen?`)) {
+  if (!confirm(`Are you sure you want to permanently delete ${selectedVideoIds.size} video(s)?`)) {
     return;
   }
 
@@ -67,10 +67,10 @@ async function bulkDeleteVideos() {
     if (res.ok) {
       window.location.reload();
     } else {
-      alert("Fehler beim Löschen der Videos.");
+      alert("Failed to delete videos.");
     }
   } catch (err) {
-    alert("Netzwerkfehler: " + err);
+    alert("Network error: " + err);
   }
 }
 
@@ -86,9 +86,9 @@ async function bulkPinVideos(pinState) {
     if (res.ok) {
       window.location.reload();
     } else {
-      alert("Fehler beim Anpassen des Pin-Status.");
+      alert("Failed to update pin status.");
     }
   } catch (err) {
-    alert("Netzwerkfehler: " + err);
+    alert("Network error: " + err);
   }
 }

@@ -548,12 +548,12 @@ class YtDlpService:
         """Test and verify cookies against yt-dlp cookie jar."""
         path = Path(cookies_path if cookies_path is not None else settings.cookies_path)
         if not path.is_file():
-            return False, "Keine Cookie-Datei gefunden."
+            return False, "No cookie file found."
 
         try:
             content = path.read_text(encoding="utf-8", errors="ignore").strip()
             if not content:
-                return False, "Die Cookie-Datei ist leer."
+                return False, "The cookie file is empty."
 
             ydl_opts = {
                 "cookiefile": str(path),
@@ -563,11 +563,11 @@ class YtDlpService:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 cookiejar = getattr(ydl, "cookiejar", None)
                 if not cookiejar:
-                    return False, "Cookies konnten nicht geladen werden."
+                    return False, "Could not load cookies."
 
                 yt_cookies = [c for c in cookiejar if c.domain and "youtube.com" in c.domain]
                 if not yt_cookies:
-                    return False, "Keine YouTube-Cookies in der Datei gefunden."
+                    return False, "No YouTube cookies found in file."
 
                 login_cookies = [
                     c.name
@@ -576,10 +576,10 @@ class YtDlpService:
                 ]
                 if login_cookies:
                     tokens = ", ".join(sorted(set(login_cookies)))
-                    return True, f"Cookies gültig: YouTube-Login aktiv ({tokens})."
-                return True, f"Cookies geladen: {len(yt_cookies)} YouTube-Cookies vorhanden."
+                    return True, f"Cookies valid: YouTube login active ({tokens})."
+                return True, f"Cookies loaded: {len(yt_cookies)} YouTube cookies present."
         except Exception as exc:
-            return False, f"Fehler beim Prüfen der Cookies: {exc}"
+            return False, f"Error checking cookies: {exc}"
 
 
 # Global default downloader service instance

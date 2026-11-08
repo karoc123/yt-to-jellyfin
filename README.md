@@ -27,7 +27,7 @@ You run Jellyfin for your family, and you want selected YouTube channels and vid
   * Global library switcher pills (`All` plus the folders from `LIBRARIES`, default `default,kids,dokus,tech`) persisted via browser `localStorage` and `?lib=` query parameter.
 * **Quick Download Interface:**
   * Paste a video or playlist URL, pick maximum resolution (e.g. 1080p, 720p, 4K), optionally toggle SponsorBlock segment removal, and view inline queue progress.
-* **Two-Tier Mediathek Browser:**
+* **Two-Tier Library Browser:**
   * Channel cards showing video counts and library tags.
   * Channel drilldown grid with video thumbnails, durations, publish dates, and pin statuses.
   * Floating action bar for multi-select bulk operations (bulk delete & bulk pin/unpin).
@@ -79,7 +79,7 @@ Open **`http://<your-server-ip>:8099`** in your browser.
 
 ## ⚙️ Configuration Reference
 
-Die meisten Optionen (Bibliotheken, Cookies, Videoauflösung, Retention, SponsorBlock, Feed-Intervall und Jellyfin-Webhook) können direkt im Web UI unter **Einstellungen** (`/settings`) verwaltet werden. Die folgenden Umgebungsvariablen dienen als Startkonfiguration bzw. Fallback:
+Most options (libraries, cookies, video resolution, retention, SponsorBlock, feed interval, and Jellyfin webhook) can be configured directly in the Web UI under **Settings** (`/settings`). The following environment variables serve as initial configuration or fallbacks:
 
 | Environment Variable | Default | Description |
 |---|---|---|
@@ -103,8 +103,8 @@ Die meisten Optionen (Bibliotheken, Cookies, Videoauflösung, Retention, Sponsor
 Jellyfin natively reads NFO files without needing any custom plugins:
 
 1. In Jellyfin, navigate to **Dashboard** -> **Libraries** -> **Add Media Library**.
-2. Set **Content Type** to **Shows** (or "Serien / TV Shows").
-3. Set **Display Name** (e.g., `YouTube` or `Kinder YouTube`).
+2. Set **Content Type** to **Shows** (or "TV Shows").
+3. Set **Display Name** (e.g., `YouTube` or `Kids YouTube`).
 4. Under **Folders**, add the path pointing to `/media` (or `/media/kids` for a dedicated kids library).
 5. In **Metadata Readers**, enable **Nfo** and move it to the top of the list.
 6. Under **Metadata Downloaders** and **Image Fetchers**, disable online scrapers (TheTVDB, TheMovieDb) to prevent false matches, as all metadata is supplied locally.
@@ -137,7 +137,7 @@ For full CLI documentation and options, see [docs/migration_tubearchivist.md](do
 
 ## 🍪 Authentication & Cookies
 
-To download age-restricted or member-only videos, upload or paste a Netscape `cookies.txt` file directly in the Web UI under **Einstellungen** (`/settings`). Cookies are securely stored in `/data/cookies.txt` with permissions `0600` and automatically persist inside your mounted `./data` volume. See [docs/cookies.md](docs/cookies.md) for step-by-step export guidelines.
+To download age-restricted or member-only videos, upload or paste a Netscape `cookies.txt` file directly in the Web UI under **Settings** (`/settings`). Cookies are securely stored in `/data/cookies.txt` with permissions `0600` and automatically persist inside your mounted `./data` volume. See [docs/cookies.md](docs/cookies.md) for step-by-step export guidelines.
 
 ---
 

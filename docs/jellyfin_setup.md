@@ -31,9 +31,9 @@ Every generated NFO file includes `<lockdata>true</lockdata>`, which prevents Je
 2. Go to **Dashboard** -> **Libraries** -> **Add Media Library**.
 
 ### Step 2: Set Content Type and Display Name
-1. **Content Type**: Choose **Shows** (or "Serien / TV Shows").
+1. **Content Type**: Choose **Shows** (or "TV Shows").
    * *Important:* Do **not** select "Music Videos" or "Home Videos", as these types do not support season/episode hierarchy and Kodi XML NFO files as reliably as TV Shows.
-2. **Display Name**: e.g., `YouTube`, `YouTube Dokus`, or `Kinder YouTube`.
+2. **Display Name**: e.g., `YouTube`, `YouTube Documentaries`, or `Kids YouTube`.
 
 ### Step 3: Add Media Folder Path
 1. Click the **+** button under **Folders**.
@@ -65,4 +65,4 @@ Every generated NFO file includes `<lockdata>true</lockdata>`, which prevents Je
    * Under Jellyfin **Dashboard** -> **Users** -> edit your children's profiles to only grant access to the `kids` library.
 2. **Documentaries & Learning:**
    * Direct science/documentary channels to `dokus`.
-   * Mount `/media/dokus` into a "Dokumentationen" library in Jellyfin.
+   * Mount `/media/dokus` into a "Documentaries" library in Jellyfin.

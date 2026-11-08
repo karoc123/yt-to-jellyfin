@@ -1,6 +1,6 @@
 # TubeArchivist Migration Guide
 
-`yt-to-jellyfin` provides migration tools both via the CLI utility (`migrate-tubearchivist`) and directly in the web UI under **Abonnements** to transition your existing **TubeArchivist** archive and actual channel subscriptions into a Jellyfin-compliant TV Show library and SQLite catalog.
+`yt-to-jellyfin` provides migration tools both via the CLI utility (`migrate-tubearchivist`) and directly in the web UI under **Subscriptions** to transition your existing **TubeArchivist** archive and actual channel subscriptions into a Jellyfin-compliant TV Show library and SQLite catalog.
 
 ---
 
@@ -94,6 +94,6 @@ uv run migrate-tubearchivist \
 
 ### C. Import via Web UI
 Open **`http://<your-ip>:8099/subscriptions`**:
-* Expand the **Abonnements importieren (TubeArchivist / OPML / JSON)** section.
+* Expand the **Import Subscriptions (TubeArchivist / OPML / JSON)** section.
 * Either upload your `subscriptions.json` / `subscriptions.opml` file, or enter your TubeArchivist URL and API Token.
-* Click **Abos importieren**. All active subscriptions will be imported immediately.
+* Click **Import Subscriptions**. All active subscriptions will be imported immediately.

@@ -388,8 +388,26 @@ main {
 
 /* Download queue */
 .job-card {
+  padding: 0;
+  gap: 0;
+}
+
+.job-card .card-body {
   padding: 12px;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
+  flex: 1;
+}
+
+.queue-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.queue-link:hover {
+  text-decoration: underline;
 }
 
 .card-head {

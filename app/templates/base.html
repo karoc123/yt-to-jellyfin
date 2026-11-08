@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,7 +18,7 @@
 
       <!-- Library Switcher Pills: the active library lives in the URL (?lib=) only -->
       <div class="library-switcher" id="lib-switcher">
-        <a href="{{ request.url.path }}" class="lib-pill {% if not current_lib or current_lib == 'all' %}active{% endif %}">🌐 Alle</a>
+        <a href="{{ request.url.path }}" class="lib-pill {% if not current_lib or current_lib == 'all' %}active{% endif %}">🌐 All</a>
         {% for lib in library_options() %}
         <a href="{{ request.url.path }}?lib={{ lib.name|urlencode }}" class="lib-pill {% if current_lib == lib.name %}active{% endif %}">{{ lib.icon }} {{ lib.label }}</a>
         {% endfor %}
@@ -26,9 +26,9 @@
 
       <nav class="nav-links">
         <a href="/{{ lib_qs }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Download</a>
-        <a href="/browser{{ lib_qs }}" class="nav-link {% if active_page == 'browser' %}active{% endif %}">Mediathek</a>
-        <a href="/subscriptions{{ lib_qs }}" class="nav-link {% if active_page == 'subscriptions' %}active{% endif %}">Abos</a>
-        <a href="/settings{{ lib_qs }}" class="nav-link {% if active_page == 'settings' %}active{% endif %}">Einstellungen</a>
+        <a href="/browser{{ lib_qs }}" class="nav-link {% if active_page == 'browser' %}active{% endif %}">Library</a>
+        <a href="/subscriptions{{ lib_qs }}" class="nav-link {% if active_page == 'subscriptions' %}active{% endif %}">Subscriptions</a>
+        <a href="/settings{{ lib_qs }}" class="nav-link {% if active_page == 'settings' %}active{% endif %}">Settings</a>
       </nav>
     </div>
   </header>

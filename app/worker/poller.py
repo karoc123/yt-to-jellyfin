@@ -249,10 +249,14 @@ class SubscriptionPoller:
                 candidates = self._newest_within_count(cursor, channel_id, candidates, max_count)
 
         for entry in candidates:
+            thumb = entry.thumbnail_url or (
+                f"https://i.ytimg.com/vi/{entry.video_id}/hqdefault.jpg" if entry.video_id else ""
+            )
             payload: dict[str, Any] = {
                 "video_id": entry.video_id,
                 "url": entry.link,
                 "title": entry.title,
+                "thumbnail": thumb,
                 "channel_id": channel_id,
                 "channel_name": channel_name,
                 "library": library,

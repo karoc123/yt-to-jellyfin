@@ -1,5 +1,6 @@
 """SQLite-backed queue manager with atomic transitions, deduplication, and crash recovery."""
 
+import json
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -123,6 +124,24 @@ class JobQueue:
             conn.execute(
                 "UPDATE jobs SET progress = ? WHERE id = ?",
                 (clamped, job_id),
+            )
+
+    def update_payload(self, job_id: str, updates: dict[str, Any]) -> None:
+        """Merge key-value pairs into job payload JSON."""
+        with self.db.connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT payload FROM jobs WHERE id = ?", (job_id,))
+            row = cursor.fetchone()
+            if not row:
+                return
+            try:
+                payload = json.loads(row["payload"]) if row["payload"] else {}
+            except Exception:
+                payload = {}
+            payload.update(updates)
+            cursor.execute(
+                "UPDATE jobs SET payload = ? WHERE id = ?",
+                (json.dumps(payload), job_id),
             )
 
     def mark_completed(self, job_id: str) -> None:

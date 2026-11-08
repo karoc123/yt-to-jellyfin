@@ -4,32 +4,32 @@
 
 {% block content %}
 <div class="download-card">
-  <h2 class="card-heading">Schnell-Download</h2>
+  <h2 class="card-heading">Quick Download</h2>
   <form action="/api/downloads" method="POST" class="download-form">
     <div class="download-form-row">
       <input
         type="url"
         name="url"
-        placeholder="YouTube-Video-, Shorts- oder Playlist-Link einfügen..."
+        placeholder="Paste YouTube video, Shorts, or playlist link..."
         required
         class="url-input"
         autocomplete="off"
       >
       <input type="hidden" name="library" value="{{ current_lib or 'default' }}">
       <button type="submit" class="btn">
-        <span aria-hidden="true">⬇️</span> Herunterladen
+        <span aria-hidden="true">⬇️</span> Download
       </button>
     </div>
 
     <div>
       <button type="button" class="options-toggle" onclick="toggleAdvancedOptions()">
-        <span aria-hidden="true">⚙️</span> Zusätzliche Optionen (Auflösung, SponsorBlock, Ziel-Bibliothek)
+        <span aria-hidden="true">⚙️</span> Additional options (resolution, SponsorBlock, target library)
       </button>
     </div>
 
     <div class="advanced-options" id="advanced-options">
       <div>
-        <label class="field-label" for="dl-target-library">Ziel-Bibliothek:</label>
+        <label class="field-label" for="dl-target-library">Target Library:</label>
         <select id="dl-target-library" name="target_library" class="url-input input-sm">
           {% for lib in library_options() %}
           <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
@@ -38,9 +38,9 @@
       </div>
 
       <div>
-        <label class="field-label" for="dl-max-height">Max. Auflösung:</label>
+        <label class="field-label" for="dl-max-height">Max. Resolution:</label>
         <select id="dl-max-height" name="max_height" class="url-input input-sm">
-          <option value="">Beste Qualität (Original)</option>
+          <option value="">Best Quality (Original)</option>
           <option value="1080">1080p (Full HD)</option>
           <option value="720">720p (HD)</option>
           <option value="480">480p (SD)</option>
@@ -50,7 +50,7 @@
       <div>
         <span class="field-label">SponsorBlock:</span>
         <label class="checkbox-label">
-          <input type="checkbox" name="sponsorblock" value="1" checked> Sponsoren automatisch herausschneiden
+          <input type="checkbox" name="sponsorblock" value="1" checked> Automatically remove sponsored segments
         </label>
       </div>
     </div>

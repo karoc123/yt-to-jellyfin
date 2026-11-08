@@ -46,9 +46,9 @@ def test_settings_view_no_cookies(test_client: TestClient) -> None:
     """Settings page renders correctly when no cookies file exists."""
     response = test_client.get("/settings")
     assert response.status_code == 200
-    assert "Einstellungen" in response.text
-    assert "YouTube-Authentifizierung (Cookies)" in response.text
-    assert "Keine Cookies hinterlegt" in response.text
+    assert "Settings" in response.text
+    assert "YouTube Authentication (Cookies)" in response.text
+    assert "No cookies saved" in response.text
     assert "Netscape" in response.text
 
 
@@ -62,8 +62,8 @@ def test_settings_view_with_valid_cookies(
 
     response = test_client.get("/settings")
     assert response.status_code == 200
-    assert "Cookies aktiv" in response.text
-    assert "Gespeicherte Cookies löschen" in response.text
+    assert "Cookies active" in response.text
+    assert "Delete saved cookies" in response.text
 
 
 def test_settings_view_with_invalid_cookies(
@@ -76,7 +76,7 @@ def test_settings_view_with_invalid_cookies(
 
     response = test_client.get("/settings")
     assert response.status_code == 200
-    assert "Datei ungültig" in response.text
+    assert "Invalid file" in response.text
 
 
 def test_save_cookies_via_file_upload(
@@ -167,13 +167,13 @@ def test_delete_cookies(
 def test_settings_flash_messages(test_client: TestClient) -> None:
     """Flash messages are correctly rendered on the settings page."""
     res_saved = test_client.get("/settings?msg=cookies_saved")
-    assert "Cookies wurden erfolgreich gespeichert" in res_saved.text
+    assert "Cookies saved successfully" in res_saved.text
 
     res_deleted = test_client.get("/settings?msg=cookies_deleted")
-    assert "Cookies wurden gelöscht" in res_deleted.text
+    assert "Saved cookies deleted" in res_deleted.text
 
     res_invalid = test_client.get("/settings?msg=cookies_invalid")
-    assert "Ungültiges Cookie-Format" in res_invalid.text
+    assert "Invalid cookie format" in res_invalid.text
 
 
 def test_libraries_management(test_client: TestClient) -> None:
@@ -370,7 +370,7 @@ def test_jellyfin_settings_and_connection_test(
 
     # Mock test connection
     async def mock_test_jf(url: str, key: str) -> tuple[bool, str]:
-        return True, "Verbindung erfolgreich! Server: MyJellyfin (v10.8.10)"
+        return True, "Connection successful! Server: MyJellyfin (v10.8.10)"
 
     monkeypatch.setattr("app.api.endpoints.actions.test_jellyfin_connection", mock_test_jf)
 

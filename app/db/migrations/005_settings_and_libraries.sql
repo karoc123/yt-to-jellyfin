@@ -9,9 +9,9 @@ CREATE TABLE IF NOT EXISTS libraries (
 );
 
 INSERT OR IGNORE INTO libraries (name, label, icon) VALUES
-    ('default', 'Standard', '📁'),
+    ('default', 'Default', '📁'),
     ('kids', 'Kids', '🧒'),
-    ('dokus', 'Dokus', '📚'),
+    ('dokus', 'Documentaries', '📚'),
     ('tech', 'Tech', '💻');
 
 INSERT OR IGNORE INTO libraries (name, label, icon)

@@ -102,6 +102,22 @@ def test_queue_deduplication(queue: JobQueue) -> None:
     assert job4 is not None
 
 
+def test_queue_update_payload(queue: JobQueue) -> None:
+    """Test updating existing job payload fields in-place."""
+    job = queue.enqueue("download_video", {"video_id": "vid_orig", "url": "http://example.com"})
+    assert job is not None
+
+    queue.update_payload(
+        job.id, {"title": "Updated Title", "thumbnail": "http://example.com/thumb.jpg"}
+    )
+    updated = queue.get_job(job.id)
+    assert updated is not None
+    assert updated.payload["video_id"] == "vid_orig"
+    assert updated.payload["url"] == "http://example.com"
+    assert updated.payload["title"] == "Updated Title"
+    assert updated.payload["thumbnail"] == "http://example.com/thumb.jpg"
+
+
 def test_queue_crash_recovery(queue: JobQueue, temp_db: Database) -> None:
     """Test recovering crashed 'running' jobs back to 'pending'."""
     job = queue.enqueue("download_video", {"video_id": "vid_crash"})
@@ -227,6 +243,8 @@ def test_subscription_poller(queue: JobQueue, temp_db: Database) -> None:
     job = queue.claim_next_job()
     assert job is not None
     assert job.payload["video_id"] == "ep1"
+    assert job.payload["title"] == "Episode 1"
+    assert "thumbnail" in job.payload
     assert job.payload["library"] == "kids"
 
     # Second poll should not duplicate job
@@ -311,6 +329,7 @@ def test_background_worker_execution(
     assert completed_job is not None
     assert completed_job.status == "completed"
     assert completed_job.progress == 100
+    assert completed_job.payload.get("title") == "Worker Video Test"
 
     # Companion .nfo file should have been generated
     expected_nfo = layout.get_episode_nfo_path(dummy_video_path)
@@ -328,3 +347,9 @@ def test_background_worker_execution(
         assert video_row is not None
         assert video_row["title"] == "Worker Video Test"
         assert video_row["file_path"] == str(dummy_video_path)
+
+        # Quick download must NOT create an auto-download subscription (auto_download=0)
+        cursor.execute("SELECT * FROM channels WHERE id = ?", ("UCtech",))
+        channel_row = cursor.fetchone()
+        assert channel_row is not None
+        assert channel_row["auto_download"] == 0

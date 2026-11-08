@@ -38,13 +38,13 @@ def test_view_home_rendering(test_client: TestClient) -> None:
     """Test that Quick Download home page renders correctly."""
     response = test_client.get("/")
     assert response.status_code == 200
-    assert "Schnell-Download" in response.text
+    assert "Quick Download" in response.text
     assert "lib-switcher" in response.text
     assert "lib-pill" in response.text
 
 
 def test_view_browser_rendering_and_library_filter(test_client: TestClient, tmp_path: Path) -> None:
-    """Test that Mediathek browser renders channels and filters by library."""
+    """Test that library browser renders channels and filters by library."""
     test_db = Database(tmp_path / "web_test.db")
     with test_db.connection() as conn:
         conn.execute(
@@ -52,7 +52,7 @@ def test_view_browser_rendering_and_library_filter(test_client: TestClient, tmp_
             INSERT INTO channels (id, name, url, folder_name, library)
             VALUES (?, ?, ?, ?, ?)
             """,
-            ("UCkids_1", "Kinderkanal", "https://youtube.com/@kids", "Kinderkanal", "kids"),
+            ("UCkids_1", "Kids Channel", "https://youtube.com/@kids", "Kids Channel", "kids"),
         )
         conn.execute(
             """
@@ -65,13 +65,13 @@ def test_view_browser_rendering_and_library_filter(test_client: TestClient, tmp_
     # View all channels
     res_all = test_client.get("/browser")
     assert res_all.status_code == 200
-    assert "Kinderkanal" in res_all.text
+    assert "Kids Channel" in res_all.text
     assert "Tech Channel" in res_all.text
 
     # View only kids library
     res_kids = test_client.get("/browser?lib=kids")
     assert res_kids.status_code == 200
-    assert "Kinderkanal" in res_kids.text
+    assert "Kids Channel" in res_kids.text
     assert "Tech Channel" not in res_kids.text
 
 
@@ -186,8 +186,8 @@ def test_subscriptions_flow(test_client: TestClient, tmp_path: Path) -> None:
     assert res_view.status_code == 200
     assert "New Sub Channel" in res_view.text
     assert "dokus" in res_view.text
-    assert "5 Videos" in res_view.text
-    assert "14 Tage" in res_view.text
+    assert "5 videos" in res_view.text
+    assert "14 days" in res_view.text
 
     # Delete subscription
     res_del = test_client.post(
@@ -244,13 +244,13 @@ def test_browser_shows_channel_poster(
 
     media = tmp_path / "media"
     monkeypatch.setattr(config.settings, "media_dir", media)
-    poster = media / "default" / "Poster Kanal" / "poster.jpg"
+    poster = media / "default" / "Poster Channel" / "poster.jpg"
     poster.parent.mkdir(parents=True)
     poster.write_bytes(b"\xff\xd8synthetic\xff\xd9")
     with Database(tmp_path / "web_test.db").connection() as conn:
         conn.execute(
             "INSERT INTO channels (id, name, url, folder_name, library)"
-            " VALUES ('UCposter1', 'Poster Kanal', 'u', 'Poster Kanal', 'default')"
+            " VALUES ('UCposter1', 'Poster Channel', 'u', 'Poster Channel', 'default')"
         )
 
     page = test_client.get("/browser")
@@ -278,3 +278,99 @@ def test_subscribe_unresolvable_channel_is_not_inserted(
     assert res.status_code == 303
     with Database(tmp_path / "web_test.db").connection() as conn:
         assert conn.execute("SELECT COUNT(*) FROM channels").fetchone()[0] == 0
+
+
+def test_queue_rendering_with_title_and_thumbnail(test_client: TestClient, tmp_path: Path) -> None:
+    """Queue card displays video title and thumbnail image when available."""
+    import json
+
+    test_db = Database(tmp_path / "web_test.db")
+    payload = {
+        "title": "Super Cool Video Title",
+        "thumbnail": "https://i.ytimg.com/vi/cool1234567/hqdefault.jpg",
+        "url": "https://www.youtube.com/watch?v=cool1234567",
+        "channel_name": "Cool Channel",
+        "library": "default",
+    }
+    with test_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO jobs (id, type, payload, status, progress, created_at)
+            VALUES (?, 'download_video', ?, 'running', 42, '2026-11-08T20:00:00Z')
+            """,
+            ("job_test_thumb", json.dumps(payload)),
+        )
+
+    response = test_client.get("/partials/queue")
+    assert response.status_code == 200
+    assert "Super Cool Video Title" in response.text
+    assert "https://i.ytimg.com/vi/cool1234567/hqdefault.jpg" in response.text
+    assert "Cool Channel" in response.text
+    assert "queue-link" in response.text
+    assert "https://www.youtube.com/watch?v=cool1234567" in response.text
+
+
+def test_queue_rendering_without_thumbnail(test_client: TestClient, tmp_path: Path) -> None:
+    """Queue card renders cleanly when thumbnail is absent (no broken image tag)."""
+    import json
+
+    test_db = Database(tmp_path / "web_test.db")
+    payload = {
+        "title": "Audio Only Track",
+        "url": "https://example.com/audio",
+        "library": "default",
+    }
+    with test_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO jobs (id, type, payload, status, progress, created_at)
+            VALUES (?, 'download_video', ?, 'pending', 0, '2026-11-08T20:05:00Z')
+            """,
+            ("job_test_nothumb", json.dumps(payload)),
+        )
+
+    response = test_client.get("/partials/queue")
+    assert response.status_code == 200
+    assert "Audio Only Track" in response.text
+    assert '<div class="card-media">' not in response.text
+
+
+def test_extract_youtube_video_id_patterns() -> None:
+    """Test extracting 11-character YouTube video IDs from various URL formats."""
+    from app.api.endpoints.actions import extract_youtube_video_id
+
+    assert extract_youtube_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert extract_youtube_video_id("https://youtu.be/dQw4w9WgXcQ?t=10") == "dQw4w9WgXcQ"
+    assert extract_youtube_video_id("https://www.youtube.com/shorts/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert extract_youtube_video_id("https://www.youtube.com/embed/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert extract_youtube_video_id("https://www.youtube.com/live/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert extract_youtube_video_id("dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert extract_youtube_video_id("https://www.youtube.com/playlist?list=PL1234567890") is None
+    assert extract_youtube_video_id("https://vimeo.com/12345") is None
+
+
+@pytest.mark.anyio
+async def test_fetch_youtube_oembed_parser() -> None:
+    """Test oEmbed metadata parsing with mock httpx AsyncClient."""
+    import httpx
+
+    from app.api.endpoints.actions import fetch_youtube_oembed
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "title": "Mock Video Title",
+                "author_name": "Mock Author",
+                "thumbnail_url": "https://i.ytimg.com/vi/mock/hqdefault.jpg",
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        res = await fetch_youtube_oembed(
+            "https://www.youtube.com/watch?v=mock1234567",
+            client=client,
+        )
+        assert res["title"] == "Mock Video Title"
+        assert res["channel_name"] == "Mock Author"
+        assert res["thumbnail"] == "https://i.ytimg.com/vi/mock/hqdefault.jpg"
