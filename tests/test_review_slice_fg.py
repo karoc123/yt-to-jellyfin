@@ -431,7 +431,6 @@ def test_f6_nav_label_without_queue(client: TestClient) -> None:
 # --- F7: accessibility & no inline styles ---------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="F7: icon-only buttons without aria-label")
 @pytest.mark.parametrize("path", [f"/browser?channel_id={CHANNEL_ID}", "/subscriptions"])
 def test_f7_icon_buttons_have_aria_label(client: TestClient, temp_db: Database, path: str) -> None:
     _add_channel(temp_db)
@@ -445,7 +444,6 @@ def test_f7_icon_buttons_have_aria_label(client: TestClient, temp_db: Database, 
     assert not missing, missing
 
 
-@pytest.mark.xfail(strict=True, reason="F7: inline styles in templates")
 def test_f7_no_inline_styles_in_templates() -> None:
     offenders = {}
     for template in sorted(TEMPLATES.rglob("*.html")):

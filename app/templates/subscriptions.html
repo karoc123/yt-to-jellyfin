@@ -3,18 +3,18 @@
 {% block title %}Abonnements - yt-to-jellyfin{% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+<div class="page-header">
   <div>
-    <h2 style="font-size: 1.3rem;">Abonnements verwalten</h2>
-    <p style="font-size: 13px; color: var(--text-muted);">
+    <h2 class="page-title">Abonnements verwalten</h2>
+    <p class="text-muted-sm">
       Automatische Downloads, Kanal-spezifische Aufbewahrung (TTL / Episoden-Limit) und Filter
     </p>
   </div>
 </div>
 
 <!-- Add Subscription Card -->
-<div class="download-card" style="margin-bottom: 24px;">
-  <h3 style="font-size: 1.1rem; margin-bottom: 12px;">Neuen Kanal abonnieren</h3>
+<div class="download-card">
+  <h3 class="card-heading">Neuen Kanal abonnieren</h3>
   <form action="/api/subscriptions" method="POST" class="download-form">
     <div class="download-form-row">
       <input
@@ -32,14 +32,14 @@
         class="url-input"
       >
       <button type="submit" class="btn">
-        <span>➕</span> Abonnieren
+        <span aria-hidden="true">➕</span> Abonnieren
       </button>
     </div>
 
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 8px;">
+    <div class="form-grid">
       <div>
-        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 2px;">Ziel-Bibliothek:</label>
-        <select name="library" class="url-input" style="padding: 6px;">
+        <label class="field-label" for="add-library">Ziel-Bibliothek:</label>
+        <select id="add-library" name="library" class="url-input input-sm">
           {% for lib in library_options() %}
           <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
           {% endfor %}
@@ -47,36 +47,36 @@
       </div>
 
       <div>
-        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 2px;">Max. Episoden (0 = unbegrenzt):</label>
-        <input type="number" name="retention_count" placeholder="z. B. 10" min="0" class="url-input" style="padding: 6px;">
+        <label class="field-label" for="add-retention-count">Max. Episoden (0 = unbegrenzt):</label>
+        <input id="add-retention-count" type="number" name="retention_count" placeholder="z. B. 10" min="0" class="url-input input-sm">
       </div>
 
       <div>
-        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 2px;">TTL Tage (0 = unbegrenzt):</label>
-        <input type="number" name="retention_days" placeholder="z. B. 30" min="0" class="url-input" style="padding: 6px;">
+        <label class="field-label" for="add-retention-days">TTL Tage (0 = unbegrenzt):</label>
+        <input id="add-retention-days" type="number" name="retention_days" placeholder="z. B. 30" min="0" class="url-input input-sm">
       </div>
     </div>
   </form>
 </div>
 
 <!-- Import Subscriptions Card -->
-<details class="download-card" style="margin-bottom: 24px; cursor: pointer;">
-  <summary style="font-size: 1.05rem; font-weight: 600; color: var(--primary);">
-    📥 Abonnements importieren (TubeArchivist / OPML / JSON)
+<details class="download-card import-card">
+  <summary>
+    <span aria-hidden="true">📥</span> Abonnements importieren (TubeArchivist / OPML / JSON)
   </summary>
-  <form action="/api/subscriptions/import" method="POST" enctype="multipart/form-data" style="margin-top: 14px; display: flex; flex-direction: column; gap: 12px; cursor: default;">
-    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;">
+  <form action="/api/subscriptions/import" method="POST" enctype="multipart/form-data" class="import-form">
+    <div class="form-grid form-grid-wide">
       <div>
-        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">
+        <label class="field-label" for="import-file">
           Datei hochladen (OPML XML oder TubeArchivist JSON):
         </label>
-        <input type="file" name="subscriptions_file" accept=".opml,.xml,.json" class="url-input" style="padding: 6px;">
+        <input id="import-file" type="file" name="subscriptions_file" accept=".opml,.xml,.json" class="url-input input-sm">
       </div>
       <div>
-        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">
+        <label class="field-label" for="import-library">
           Ziel-Bibliothek:
         </label>
-        <select name="library" class="url-input" style="padding: 6px;">
+        <select id="import-library" name="library" class="url-input input-sm">
           {% for lib in library_options() %}
           <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
           {% endfor %}
@@ -84,8 +84,8 @@
       </div>
     </div>
 
-    <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
-      <span style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">
+    <div class="form-divider">
+      <span class="field-label">
         Oder direkt von laufender TubeArchivist Instanz abrufen:
       </span>
       <div class="download-form-row">
@@ -94,9 +94,9 @@
       </div>
     </div>
 
-    <div style="display: flex; justify-content: flex-end;">
+    <div class="form-actions">
       <button type="submit" class="btn">
-        <span>📥</span> Abos importieren
+        <span aria-hidden="true">📥</span> Abos importieren
       </button>
     </div>
   </form>
@@ -104,28 +104,28 @@
 
 <!-- Subscribed Channels List -->
 <section>
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-    <h3 style="font-size: 1.1rem;">Aktive Abonnements ({{ channels|length }})</h3>
+  <div class="section-header">
+    <h3 class="section-title">Aktive Abonnements ({{ channels|length }})</h3>
     <form action="/api/subscriptions/sync-all" method="POST">
       {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-      <button type="submit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">
-        🔄 Jetzt alle synchronisieren
+      <button type="submit" class="btn btn-secondary btn-sm">
+        <span aria-hidden="true">🔄</span> Jetzt alle synchronisieren
       </button>
     </form>
   </div>
 
   <div class="grid">
     {% for ch in channels %}
-    <div class="card" style="padding: 16px; gap: 10px;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+    <div class="card sub-card">
+      <div class="card-head">
         <div>
-          <h4 style="font-size: 1rem;">{{ ch.name }}</h4>
-          <span style="font-size: 12px; color: var(--text-muted);">ID: {{ ch.id }}</span>
+          <h4 class="sub-name">{{ ch.name }}</h4>
+          <span class="text-muted-xs">ID: {{ ch.id }}</span>
         </div>
         <span class="badge badge-lib">{{ ch.library or 'default' }}</span>
       </div>
 
-      <div style="font-size: 13px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;">
+      <div class="sub-stats">
         <span>Episoden-Limit: {% if ch.retention_count and ch.retention_count > 0 %}{{ ch.retention_count }} Videos{% else %}Unbegrenzt{% endif %}</span>
         <span>Aufbewahrungszeit: {% if ch.retention_days and ch.retention_days > 0 %}{{ ch.retention_days }} Tage{% else %}Unbegrenzt{% endif %}</span>
         <span>Auto-Download: {% if ch.auto_download %}an{% else %}aus{% endif %}</span>
@@ -153,26 +153,26 @@
         </form>
       </details>
 
-      <div class="card-actions" style="margin-top: 8px;">
-        <form action="/api/subscriptions/sync" method="POST" style="flex: 1;">
+      <div class="card-actions">
+        <form action="/api/subscriptions/sync" method="POST" class="action-main">
           <input type="hidden" name="channel_id" value="{{ ch.id }}">
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 6px; font-size: 13px;">
-            🔄 Sync
+          <button type="submit" class="btn btn-secondary btn-sm btn-block">
+            <span aria-hidden="true">🔄</span> Sync
           </button>
         </form>
 
         <form action="/api/subscriptions/delete" method="POST" onsubmit="return confirm('Abo beenden?');">
           <input type="hidden" name="channel_id" value="{{ ch.id }}">
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 13px;">
-            🗑️
+          <button type="submit" class="btn btn-danger btn-sm" aria-label="Abo löschen" title="Abo löschen">
+            <span aria-hidden="true">🗑️</span>
           </button>
         </form>
       </div>
     </div>
     {% else %}
-    <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted); border: 1px dashed var(--card-border); border-radius: var(--radius);">
+    <div class="empty-state">
       Keine Abonnements vorhanden.
     </div>
     {% endfor %}

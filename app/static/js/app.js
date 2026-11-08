@@ -16,10 +16,8 @@ function updateBulkBar() {
   const count = selectedVideoIds.size;
   if (count > 0) {
     countEl.textContent = `${count} Video${count > 1 ? "s" : ""} ausgewählt`;
-    bar.style.display = "flex";
-  } else {
-    bar.style.display = "none";
   }
+  bar.hidden = count === 0;
 }
 
 function toggleSelectVideo(checkbox) {

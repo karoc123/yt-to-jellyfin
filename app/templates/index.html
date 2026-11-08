@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="download-card">
-  <h2 style="margin-bottom: 12px; font-size: 1.25rem;">Schnell-Download</h2>
+  <h2 class="card-heading">Schnell-Download</h2>
   <form action="/api/downloads" method="POST" class="download-form">
     <div class="download-form-row">
       <input
@@ -17,20 +17,20 @@
       >
       <input type="hidden" name="library" value="{{ current_lib or 'default' }}">
       <button type="submit" class="btn">
-        <span>⬇️</span> Herunterladen
+        <span aria-hidden="true">⬇️</span> Herunterladen
       </button>
     </div>
 
     <div>
       <button type="button" class="options-toggle" onclick="toggleAdvancedOptions()">
-        ⚙️ Zusätzliche Optionen (Auflösung, SponsorBlock, Ziel-Bibliothek)
+        <span aria-hidden="true">⚙️</span> Zusätzliche Optionen (Auflösung, SponsorBlock, Ziel-Bibliothek)
       </button>
     </div>
 
     <div class="advanced-options" id="advanced-options">
       <div>
-        <label style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 4px;">Ziel-Bibliothek:</label>
-        <select name="target_library" class="url-input" style="padding: 8px;">
+        <label class="field-label" for="dl-target-library">Ziel-Bibliothek:</label>
+        <select id="dl-target-library" name="target_library" class="url-input input-sm">
           {% for lib in library_options() %}
           <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
           {% endfor %}
@@ -38,8 +38,8 @@
       </div>
 
       <div>
-        <label style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 4px;">Max. Auflösung:</label>
-        <select name="max_height" class="url-input" style="padding: 8px;">
+        <label class="field-label" for="dl-max-height">Max. Auflösung:</label>
+        <select id="dl-max-height" name="max_height" class="url-input input-sm">
           <option value="">Beste Qualität (Original)</option>
           <option value="1080">1080p (Full HD)</option>
           <option value="720">720p (HD)</option>
@@ -48,8 +48,8 @@
       </div>
 
       <div>
-        <label style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 4px;">SponsorBlock:</label>
-        <label style="font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+        <span class="field-label">SponsorBlock:</span>
+        <label class="checkbox-label">
           <input type="checkbox" name="sponsorblock" value="1" checked> Sponsoren automatisch herausschneiden
         </label>
       </div>

@@ -10,7 +10,7 @@
   <div class="grid">
     {% for job in jobs %}
     <div class="card job-card">
-      <div class="job-card-head">
+      <div class="card-head">
         <span class="card-title">{{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}</span>
         <span class="badge badge-status-{{ job.status }}">{{ job_status_labels.get(job.status, job.status) }}</span>
       </div>
@@ -32,7 +32,7 @@
       {% set job_action = 'cancel' if job.status == 'pending' else 'retry' %}
       <form action="/api/jobs/{{ job.id }}/{{ job_action }}" method="POST"
             hx-post="/api/jobs/{{ job.id }}/{{ job_action }}" hx-target="#queue" hx-swap="outerHTML"
-            class="job-actions">
+            class="form-actions">
         {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
         {% if job_action == 'retry' %}
         <button type="submit" class="btn btn-secondary btn-sm">Erneut versuchen</button>
