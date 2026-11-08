@@ -1,5 +1,6 @@
 """HTTP endpoints for video actions, quick download enqueue, and media serving."""
 
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -182,7 +183,7 @@ async def sync_single_subscription(
     """Trigger manual RSS sync for a channel."""
     queue = JobQueue()
     poller = SubscriptionPoller(queue=queue, database=db)
-    poller.poll_channel(channel_id)
+    await asyncio.to_thread(poller.poll_channel, channel_id)
     return RedirectResponse("/subscriptions", status_code=303)
 
 
@@ -193,7 +194,7 @@ async def sync_all_subscriptions(
     """Trigger RSS sync for all channels."""
     queue = JobQueue()
     poller = SubscriptionPoller(queue=queue, database=db)
-    poller.poll_all_channels()
+    await asyncio.to_thread(poller.poll_all_channels)
     return RedirectResponse("/subscriptions", status_code=303)
 
 

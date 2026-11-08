@@ -200,7 +200,6 @@ def test_a3_subscription_zero_or_empty_retention_stored_as_null(
     assert row["retention_days"] is None
 
 
-@pytest.mark.xfail(strict=True, reason="A4: sync endpoint blocks the event loop (sync httpx)")
 def test_a4_sync_does_not_block_event_loop(
     temp_db: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
