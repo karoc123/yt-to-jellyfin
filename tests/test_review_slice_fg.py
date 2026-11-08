@@ -390,7 +390,6 @@ def test_f4_ta_import_does_not_block_event_loop(
 # --- F5: subscriptions are editable ---------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="F5: no subscription edit endpoint")
 def test_f5_update_subscription(client: TestClient, temp_db: Database) -> None:
     _add_channel(temp_db)
     with temp_db.connection() as conn:

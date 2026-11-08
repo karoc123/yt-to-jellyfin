@@ -438,3 +438,34 @@ main {
   border-color: var(--danger);
   background-color: rgba(218, 54, 51, 0.15);
 }
+
+/* Subscription edit form */
+.sub-edit summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--accent-hover);
+}
+
+.sub-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.field-label {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.input-sm {
+  padding: 6px;
+}
+
+.checkbox-label {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}

@@ -299,6 +299,35 @@ async def add_subscription(
     return redirect_to("/subscriptions", library, msg="sub_added")
 
 
+@router.post("/subscriptions/update")
+async def update_subscription(
+    channel_id: str = Form(...),
+    library: str = Form("default"),
+    retention_count: str | None = Form(None),
+    retention_days: str | None = Form(None),
+    auto_download: str | None = Form(None),
+    lib: str | None = Form(None),
+    db_conn=Depends(get_db),
+) -> RedirectResponse:
+    """Edit a subscription's library, retention rules and auto-download flag."""
+    db_conn.execute(
+        """
+        UPDATE channels
+        SET library = ?, retention_count = ?, retention_days = ?, auto_download = ?,
+            updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
+        WHERE id = ?
+        """,
+        (
+            library or "default",
+            _positive_int_or_none(retention_count),
+            _positive_int_or_none(retention_days),
+            1 if auto_download == "1" else 0,
+            channel_id,
+        ),
+    )
+    return redirect_to("/subscriptions", lib, msg="sub_updated")
+
+
 @router.post("/subscriptions/sync")
 async def sync_single_subscription(
     channel_id: str = Form(...),
