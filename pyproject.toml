@@ -40,3 +40,5 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.extend-per-file-ignores]
 "app/main.py" = ["B008"]
+"app/api/*" = ["B008"]
+"app/api/endpoints/*" = ["B008"]

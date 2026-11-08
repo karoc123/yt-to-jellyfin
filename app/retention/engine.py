@@ -33,8 +33,8 @@ class DeletionResult:
 class RetentionEngine:
     """Evaluates retention rules (TTL, episode count) and manages video pinning."""
 
-    def __init__(self, database: Database = db) -> None:
-        self.db = database
+    def __init__(self, database: Database | None = None) -> None:
+        self.db = database if database is not None else db
 
     def set_pin_status(self, video_id: str, is_pinned: bool) -> bool:
         """Pin or unpin a video to protect it from automatic retention deletion.
