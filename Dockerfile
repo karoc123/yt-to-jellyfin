@@ -31,6 +31,10 @@ RUN apt-get update && \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
+# Deno (MIT, official denoland image, multi-arch): JS runtime for yt-dlp's YouTube
+# challenge solver (yt-dlp-ejs). Pinned version.
+COPY --from=denoland/deno:bin-2.9.8 /deno /usr/local/bin/deno
+
 # Create non-root user with UID:GID 1000:1000
 RUN groupadd -g 1000 app && \
     useradd -u 1000 -g app -s /bin/bash -m app
