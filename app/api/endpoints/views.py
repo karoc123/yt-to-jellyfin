@@ -35,6 +35,41 @@ def library_options() -> list[dict[str, str]]:
 
 templates.env.globals["library_options"] = library_options
 
+# Flash messages selected by `?msg=<key>[&n=<count>]` after a redirect. Only these fixed
+# texts are rendered (never text from the URL), `{n}` is an integer.
+FLASH_MESSAGES = {
+    "download_queued": ("status", "Download wurde in die Warteschlange gestellt."),
+    "job_retried": ("status", "Auftrag wird erneut versucht."),
+    "job_cancelled": ("status", "Auftrag wurde abgebrochen."),
+    "job_not_retryable": ("alert", "Nur fehlgeschlagene oder abgebrochene Aufträge."),
+    "job_not_cancellable": ("alert", "Laufende Aufträge können nicht abgebrochen werden."),
+    "video_pinned": ("status", "Video ist angepinnt und vor dem Aufräumen geschützt."),
+    "video_unpinned": ("status", "Video ist nicht mehr angepinnt."),
+    "video_deleted": ("status", "Video wurde gelöscht."),
+    "video_delete_failed": ("alert", "Video konnte nicht gelöscht werden."),
+    "sub_added": ("status", "Kanal wurde abonniert."),
+    "sub_failed": ("alert", "Kanal wurde nicht gefunden. Bitte URL, @Handle oder ID prüfen."),
+    "sub_updated": ("status", "Abo wurde gespeichert."),
+    "sub_deleted": ("status", "Abo wurde beendet."),
+    "synced": ("status", "Synchronisiert: {n} neue(s) Video(s) in der Warteschlange."),
+    "imported": ("status", "Import abgeschlossen: {n} Kanal/Kanäle importiert."),
+    "import_missing": ("alert", "Bitte eine Datei oder TubeArchivist-URL und Token angeben."),
+    "ta_failed": ("alert", "TubeArchivist nicht erreichbar oder Token ungültig."),
+}
+
+
+def flash_message(request: Request) -> dict[str, str] | None:
+    """Flash notice for the current request's `msg`/`n` query parameters, if any."""
+    entry = FLASH_MESSAGES.get(request.query_params.get("msg", ""))
+    if not entry:
+        return None
+    role, text = entry
+    count = request.query_params.get("n", "")
+    return {"role": role, "text": text.format(n=int(count) if count.isdigit() else 0)}
+
+
+templates.env.globals["flash_message"] = flash_message
+
 router = APIRouter(tags=["views"])
 
 

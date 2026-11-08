@@ -107,6 +107,7 @@
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
     <h3 style="font-size: 1.1rem;">Aktive Abonnements ({{ channels|length }})</h3>
     <form action="/api/subscriptions/sync-all" method="POST">
+      {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
       <button type="submit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">
         🔄 Jetzt alle synchronisieren
       </button>
@@ -132,6 +133,7 @@
       <div class="card-actions" style="margin-top: 8px;">
         <form action="/api/subscriptions/sync" method="POST" style="flex: 1;">
           <input type="hidden" name="channel_id" value="{{ ch.id }}">
+          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
           <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 6px; font-size: 13px;">
             🔄 Sync
           </button>
@@ -139,6 +141,7 @@
 
         <form action="/api/subscriptions/delete" method="POST" onsubmit="return confirm('Abo beenden?');">
           <input type="hidden" name="channel_id" value="{{ ch.id }}">
+          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
           <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 13px;">
             🗑️
           </button>

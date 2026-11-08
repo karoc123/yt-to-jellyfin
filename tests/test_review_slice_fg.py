@@ -325,7 +325,6 @@ def test_f3_internal_jobs_not_listed(client: TestClient, temp_db: Database) -> N
 # --- F4: feedback after actions -------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="F4: no notice after import with 0 channels")
 def test_f4_import_without_channels_shows_notice(client: TestClient) -> None:
     response = client.post(
         "/api/subscriptions/import",
@@ -337,7 +336,6 @@ def test_f4_import_without_channels_shows_notice(client: TestClient) -> None:
     assert any("0" in n for n in notices), notices
 
 
-@pytest.mark.xfail(strict=True, reason="F4: unresolvable subscription fails silently")
 def test_f4_unresolvable_subscription_shows_error(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -353,7 +351,6 @@ def test_f4_unresolvable_subscription_shows_error(
     assert notices, "no error notice shown"
 
 
-@pytest.mark.xfail(strict=True, reason="F4: TA-API import blocks the event loop")
 def test_f4_ta_import_does_not_block_event_loop(
     temp_db: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:

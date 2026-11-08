@@ -156,8 +156,9 @@ class SubscriptionsMigrator:
                     resp.raise_for_status()
                     data = resp.json()
                 except Exception as exc:
+                    # Surface the failure instead of importing a silently truncated list
                     logger.error("Error communicating with TubeArchivist API: %s", exc)
-                    break
+                    raise
 
                 items = data.get("data", [])
                 if not items:

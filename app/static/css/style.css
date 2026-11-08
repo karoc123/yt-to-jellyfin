@@ -423,3 +423,18 @@ main {
   color: var(--text-muted);
   border: 1px solid var(--text-muted);
 }
+
+/* Flash notices after actions */
+.flash {
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--primary);
+  background-color: rgba(35, 134, 54, 0.15);
+  font-size: 14px;
+}
+
+.flash-alert {
+  border-color: var(--danger);
+  background-color: rgba(218, 54, 51, 0.15);
+}

@@ -35,6 +35,13 @@ class BulkPinRequest(BaseModel):
     is_pinned: bool
 
 
+def redirect_to(path: str, lib: str | None = None, **params: Any) -> RedirectResponse:
+    """303 redirect keeping the active library; `msg`/`n` select a flash message."""
+    query = {"lib": lib} if lib and lib != "all" else {}
+    query.update({k: v for k, v in params.items() if v is not None})
+    return RedirectResponse(f"{path}?{urlencode(query)}" if query else path, status_code=303)
+
+
 @router.post("/downloads")
 async def create_download_job(
     url: str = Form(...),
@@ -57,14 +64,7 @@ async def create_download_job(
         payload["sponsorblock_remove"] = ["sponsor", "intro"]
 
     queue.enqueue("download_video", payload)
-    return RedirectResponse(f"/?lib={chosen_lib}", status_code=303)
-
-
-def _home_redirect(lib: str | None, hx_request: str | None) -> RedirectResponse:
-    """Back to the queue: HTMX gets the queue fragment, plain forms the home page."""
-    path = "/partials/queue" if hx_request else "/"
-    query = f"?{urlencode({'lib': lib})}" if lib and lib != "all" else ""
-    return RedirectResponse(f"{path}{query}", status_code=303)
+    return redirect_to("/", chosen_lib, msg="download_queued")
 
 
 @router.post("/jobs/{job_id}/retry")
@@ -74,10 +74,13 @@ async def retry_job(
     hx_request: str | None = Header(None),
 ) -> RedirectResponse:
     """Retry a failed or cancelled job."""
-    queue = JobQueue()
-    if not queue.retry(job_id):
-        raise HTTPException(status_code=409, detail="Job is not failed or cancelled")
-    return _home_redirect(lib, hx_request)
+    if not JobQueue().retry(job_id):
+        if hx_request:
+            raise HTTPException(status_code=409, detail="Job is not failed or cancelled")
+        return redirect_to("/", lib, msg="job_not_retryable")
+    if hx_request:
+        return redirect_to("/partials/queue", lib)
+    return redirect_to("/", lib, msg="job_retried")
 
 
 @router.post("/jobs/{job_id}/cancel")
@@ -86,23 +89,20 @@ async def cancel_job(
     lib: str | None = Form(None),
     hx_request: str | None = Header(None),
 ) -> RedirectResponse:
-    """Cancel a pending job (running downloads cannot be interrupted -> 409)."""
-    queue = JobQueue()
-    if not queue.cancel(job_id):
-        raise HTTPException(status_code=409, detail="Only pending jobs can be cancelled")
-    return _home_redirect(lib, hx_request)
+    """Cancel a pending job; running downloads cannot be interrupted (409 / error flash)."""
+    if not JobQueue().cancel(job_id):
+        if hx_request:
+            raise HTTPException(status_code=409, detail="Only pending jobs can be cancelled")
+        return redirect_to("/", lib, msg="job_not_cancellable")
+    if hx_request:
+        return redirect_to("/partials/queue", lib)
+    return redirect_to("/", lib, msg="job_cancelled")
 
 
-def _browser_redirect(db_conn: Any, video_id: str, lib: str | None) -> RedirectResponse:
-    """Redirect back to the video's channel in the browser, keeping the active library."""
+def _video_channel(db_conn: Any, video_id: str) -> str | None:
+    """Channel of a video, used to redirect back to it in the browser."""
     row = db_conn.execute("SELECT channel_id FROM videos WHERE id = ?", (video_id,)).fetchone()
-    params = {}
-    if row and row["channel_id"]:
-        params["channel_id"] = row["channel_id"]
-    if lib and lib != "all":
-        params["lib"] = lib
-    query = f"?{urlencode(params)}" if params else ""
-    return RedirectResponse(f"/browser{query}", status_code=303)
+    return row["channel_id"] if row and row["channel_id"] else None
 
 
 @router.post("/videos/pin")
@@ -114,7 +114,8 @@ async def pin_video(
 ) -> RedirectResponse:
     """Toggle pin status on a single video."""
     retention_engine.set_pin_status(video_id, bool(is_pinned))
-    return _browser_redirect(db_conn, video_id, lib)
+    msg = "video_pinned" if is_pinned else "video_unpinned"
+    return redirect_to("/browser", lib, channel_id=_video_channel(db_conn, video_id), msg=msg)
 
 
 @router.post("/videos/delete")
@@ -124,10 +125,10 @@ async def delete_single_video(
     db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Delete a video and all companion artifacts."""
-    # Resolve the channel before the row may be removed
-    redirect = _browser_redirect(db_conn, video_id, lib)
-    retention_engine.delete_video(video_id, force=True)
-    return redirect
+    channel_id = _video_channel(db_conn, video_id)
+    result = retention_engine.delete_video(video_id, force=True)
+    msg = "video_deleted" if result.success else "video_delete_failed"
+    return redirect_to("/browser", lib, channel_id=channel_id, msg=msg)
 
 
 @router.post("/videos/bulk-delete")
@@ -246,7 +247,6 @@ async def add_subscription(
     db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Add a YouTube channel subscription (UC id, @handle or channel URL; name optional)."""
-    redirect = RedirectResponse(f"/subscriptions?lib={library}", status_code=303)
     channel_input = channel_input.strip()
     name = name.strip()
 
@@ -260,7 +260,7 @@ async def add_subscription(
             channel_id, resolved_name = await asyncio.to_thread(resolve_channel, channel_input)
         except Exception as exc:
             logger.warning("Could not resolve channel %r: %s", channel_input, exc)
-            return redirect
+            return redirect_to("/subscriptions", library, msg="sub_failed")
         name = name or resolved_name or channel_id
 
     r_count = _positive_int_or_none(retention_count)
@@ -296,38 +296,43 @@ async def add_subscription(
             r_days,
         ),
     )
-    return redirect
+    return redirect_to("/subscriptions", library, msg="sub_added")
 
 
 @router.post("/subscriptions/sync")
 async def sync_single_subscription(
     channel_id: str = Form(...),
+    lib: str | None = Form(None),
 ) -> RedirectResponse:
     """Trigger manual RSS sync for a channel."""
     queue = JobQueue()
     poller = SubscriptionPoller(queue=queue, database=db)
-    await asyncio.to_thread(poller.poll_channel, channel_id)
-    return RedirectResponse("/subscriptions", status_code=303)
+    queued = await asyncio.to_thread(poller.poll_channel, channel_id)
+    return redirect_to("/subscriptions", lib, msg="synced", n=len(queued))
 
 
 @router.post("/subscriptions/sync-all")
-async def sync_all_subscriptions() -> RedirectResponse:
+async def sync_all_subscriptions(
+    lib: str | None = Form(None),
+) -> RedirectResponse:
     """Trigger RSS sync for all channels."""
     queue = JobQueue()
     poller = SubscriptionPoller(queue=queue, database=db)
-    await asyncio.to_thread(poller.poll_all_channels)
-    return RedirectResponse("/subscriptions", status_code=303)
+    results = await asyncio.to_thread(poller.poll_all_channels)
+    queued = sum(len(ids) for ids in results.values())
+    return redirect_to("/subscriptions", lib, msg="synced", n=queued)
 
 
 @router.post("/subscriptions/delete")
 async def delete_subscription(
     channel_id: str = Form(...),
+    lib: str | None = Form(None),
     db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Delete a channel subscription."""
     cursor = db_conn.cursor()
     cursor.execute("DELETE FROM channels WHERE id = ?", (channel_id,))
-    return RedirectResponse("/subscriptions", status_code=303)
+    return redirect_to("/subscriptions", lib, msg="sub_deleted")
 
 
 @router.post("/subscriptions/import")
@@ -346,9 +351,17 @@ async def import_subscriptions(
             channels = migrator.parse_json(content)
         else:
             channels = migrator.parse_opml(content)
-        migrator.import_channels(channels, library=library)
     elif ta_url and ta_token:
-        channels = migrator.fetch_from_tubearchivist_api(ta_url, ta_token)
-        migrator.import_channels(channels, library=library)
+        try:
+            # Blocking HTTP calls to TubeArchivist must not stall the event loop
+            channels = await asyncio.to_thread(
+                migrator.fetch_from_tubearchivist_api, ta_url, ta_token
+            )
+        except Exception as exc:
+            logger.warning("TubeArchivist import failed: %s", exc)
+            return redirect_to("/subscriptions", library, msg="ta_failed")
+    else:
+        return redirect_to("/subscriptions", library, msg="import_missing")
 
-    return RedirectResponse(f"/subscriptions?lib={library}", status_code=303)
+    imported = await asyncio.to_thread(migrator.import_channels, channels, library=library)
+    return redirect_to("/subscriptions", library, msg="imported", n=imported)

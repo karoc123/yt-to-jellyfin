@@ -33,6 +33,10 @@
   </header>
 
   <main>
+    {% set flash = flash_message(request) %}
+    {% if flash %}
+    <div class="flash flash-{{ flash.role }}" role="{{ flash.role }}">{{ flash.text }}</div>
+    {% endif %}
     {% block content %}{% endblock %}
   </main>
 </body>
