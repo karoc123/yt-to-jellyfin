@@ -103,7 +103,10 @@ class BackgroundWorker:
         library = payload.get("library") or "default"
 
         # Read format and SponsorBlock settings from payload or defaults
+        format_selector = payload.get("format") or payload.get("format_selector")
+        format_sort = payload.get("format_sort")
         max_height = payload.get("max_height")
+        throttled_rate = payload.get("throttled_rate_bytes") or payload.get("throttled_rate")
         sponsorblock_remove = payload.get("sponsorblock_remove", [])
         sponsorblock_mark = payload.get("sponsorblock_mark", [])
 
@@ -132,13 +135,21 @@ class BackgroundWorker:
         base_template = f"{Path(video_filename).stem}.%(ext)s"
 
         # Step 3: Configure download options with Season destination and format/SponsorBlock
-        dl_options = DownloadOptions(
-            output_dir=season_dir,
-            output_template=base_template,
-            max_height=max_height,
-            sponsorblock_remove=sponsorblock_remove,
-            sponsorblock_mark=sponsorblock_mark,
-        )
+        opts_kwargs: dict[str, Any] = {
+            "output_dir": season_dir,
+            "output_template": base_template,
+            "max_height": max_height,
+            "sponsorblock_remove": sponsorblock_remove,
+            "sponsorblock_mark": sponsorblock_mark,
+        }
+        if format_selector:
+            opts_kwargs["format_selector"] = format_selector
+        if format_sort:
+            opts_kwargs["format_sort"] = format_sort
+        if throttled_rate:
+            opts_kwargs["throttled_rate_bytes"] = int(throttled_rate)
+
+        dl_options = DownloadOptions(**opts_kwargs)
 
         # Progress reporting callback
         def _on_progress(update: Any) -> None:

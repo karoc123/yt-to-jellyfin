@@ -146,6 +146,14 @@ class YtDlpService:
             "merge_output_format": options.merge_output_format,
         }
 
+        # Format Sort (--format-sort)
+        if options.format_sort:
+            if isinstance(options.format_sort, str):
+                sort_list = [s.strip() for s in options.format_sort.split(",") if s.strip()]
+                ydl_opts["format_sort"] = sort_list
+            else:
+                ydl_opts["format_sort"] = options.format_sort
+
         # SponsorBlock integration
         if options.sponsorblock_remove:
             ydl_opts["sponsorblock_remove"] = options.sponsorblock_remove
@@ -190,6 +198,8 @@ class YtDlpService:
         # Rate limiting & sleep intervals
         if options.rate_limit_bytes is not None:
             ydl_opts["ratelimit"] = options.rate_limit_bytes
+        if options.throttled_rate_bytes is not None:
+            ydl_opts["throttledratelimit"] = options.throttled_rate_bytes
         if options.sleep_interval is not None:
             ydl_opts["sleep_interval"] = options.sleep_interval
         if options.max_sleep_interval is not None:

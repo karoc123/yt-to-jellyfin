@@ -46,12 +46,16 @@ class DownloadOptions:
 
     # Quality & Formats
     format_selector: str = "bestvideo*+bestaudio/best"
+    format_sort: list[str] | str | None = None
     max_height: int | None = None
     merge_output_format: str = "mp4"
 
     # SponsorBlock
     sponsorblock_remove: list[str] = field(default_factory=list)
     sponsorblock_mark: list[str] = field(default_factory=list)
+
+    # Throttled rate limit (restart if slower than X bytes/sec)
+    throttled_rate_bytes: int | None = None
 
     # Execution overrides
     ffmpeg_path: str | None = None
