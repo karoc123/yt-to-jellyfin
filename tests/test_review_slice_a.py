@@ -250,7 +250,6 @@ def test_a4_sync_does_not_block_event_loop(
     assert max_gap < 0.15, f"event loop was blocked for {max_gap:.2f}s"
 
 
-@pytest.mark.xfail(strict=True, reason="A5: re-download resets is_pinned/created_at (REPLACE)")
 def test_a5_redownload_keeps_pin_and_created_at(
     queue: JobQueue, temp_db: Database, tmp_path: Path
 ) -> None:

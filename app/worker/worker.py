@@ -201,14 +201,26 @@ class BackgroundWorker:
                 ),
             )
 
-            # Insert video record
+            # Upsert video record (keeps is_pinned and created_at on re-download)
             conn.execute(
                 """
-                INSERT OR REPLACE INTO videos (
+                INSERT INTO videos (
                     id, channel_id, title, description, published_at, duration,
                     file_path, nfo_path, thumbnail_path, file_size, status, created_at, updated_at
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    channel_id = excluded.channel_id,
+                    title = excluded.title,
+                    description = excluded.description,
+                    published_at = excluded.published_at,
+                    duration = excluded.duration,
+                    file_path = excluded.file_path,
+                    nfo_path = excluded.nfo_path,
+                    thumbnail_path = excluded.thumbnail_path,
+                    file_size = excluded.file_size,
+                    status = excluded.status,
+                    updated_at = excluded.updated_at
                 """,
                 (
                     result.id,
