@@ -22,3 +22,16 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest -q
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build Docker image
+        run: docker build -t yt-to-jellyfin:ci .
+      - name: Verify container healthcheck
+        run: |
+          docker run -d --name yt-ci-check -p 8000:8000 yt-to-jellyfin:ci
+          sleep 5
+          docker exec yt-ci-check curl -f http://localhost:8000/api/health
+          docker stop yt-ci-check

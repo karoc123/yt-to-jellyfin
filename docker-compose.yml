@@ -1,0 +1,17 @@
+services:
+  yt-to-jellyfin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: yt-to-jellyfin:latest
+    container_name: yt-to-jellyfin
+    restart: unless-stopped
+    ports:
+      - "8099:8000"
+    environment:
+      - DATABASE_PATH=/data/app.db
+      - MEDIA_PATH=/media
+      - TZ=Europe/Berlin
+    volumes:
+      - ./data:/data
+      - ./media:/media

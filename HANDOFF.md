@@ -14,11 +14,16 @@ The repository bootstrap is complete and verified:
    * SQLite database manager with WAL mode, foreign keys, and SQL migration versioning (`PRAGMA user_version`).
    * Schema migration `001_initial_schema.sql` defining `channels`, `videos`, `jobs`, and `settings` tables.
    * Auto-migration integrated into FastAPI lifespan startup.
-5. **Local Verification:**
+5. **Containerization (Issue #3):**
+   * Production multi-stage `Dockerfile` (`ghcr.io/astral-sh/uv:latest` builder -> `python:3.13-slim` runner with `ffmpeg`, `curl`, non-root user `1000:1000`, volume mounts for `/data` and `/media`, and container healthcheck).
+   * `docker-compose.yml` preconfigured for standard deployment mapping `./data:/data` and `./media:/media`.
+   * `.dockerignore` ignoring virtualenvs, cache, and git metadata.
+   * GitHub Actions workflow updated to verify Docker image builds and container health in CI.
+6. **Local Verification:**
    * Run `./run-check.sh` locally to execute `uv sync --locked`, `ruff check`, `ruff format --check`, and `pytest`. All tests are passing green.
 
 ---
 
 ## Next Tasks (Milestone 1)
 
-1. **Issue #3:** Multi-stage Dockerfile (`uv` -> `python:3.13-slim` with `ffmpeg` and non-root user `1000:1000`) & `docker-compose.yml`.
+1. **Issue #4:** yt-dlp wrapper service & video download pipeline (`yt-dlp` integration, error handling, metadata extraction, format selection).
