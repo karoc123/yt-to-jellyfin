@@ -246,9 +246,9 @@ async def get_video_thumbnail(
 
 
 def channel_poster_path(channel: dict) -> Path | None:
-    """Existing poster.jpg of a channel folder (by name, then stored folder_name)."""
+    """Existing poster.jpg of a channel folder (by folder_name, then fallback to name)."""
     library = channel.get("library") or "default"
-    for folder in (channel.get("name"), channel.get("folder_name")):
+    for folder in (channel.get("folder_name"), channel.get("name")):
         if folder:
             path = jellyfin_layout.get_channel_poster_path(folder, library=library)
             if path.is_file():

@@ -353,3 +353,98 @@ def test_background_worker_execution(
         channel_row = cursor.fetchone()
         assert channel_row is not None
         assert channel_row["auto_download"] == 0
+
+
+def test_channel_rename_preserves_folder_continuity(
+    queue: JobQueue,
+    temp_db: Database,
+    tmp_path: Path,
+) -> None:
+    """When a channel changes its name on YouTube, new videos stay in the existing folder."""
+    media_dir = tmp_path / "media"
+    layout = JellyfinLayout(media_root=media_dir)
+    nfo = NfoGenerator()
+
+    # Pre-populate channel in DB
+    with temp_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO channels (id, name, url, folder_name, library, auto_download)
+            VALUES (
+                'UCrename123', 'Old Channel Name', 'https://youtube.com/@old',
+                'Old Folder Name', 'tech', 1
+            )
+            """
+        )
+
+    # Mock YtDlpService returning updated channel name
+    mock_downloader = MagicMock()
+    mock_downloader.async_extract_info = AsyncMock(
+        return_value=VideoMetadata(
+            id="vid_renamed_1",
+            title="Video After Rename",
+            channel="New Channel Name",
+            channel_id="UCrename123",
+            channel_url="https://youtube.com/@new",
+            upload_date="2026-11-08",
+            duration=120,
+            description="Test video",
+        )
+    )
+
+    dummy_video_path = (
+        media_dir
+        / "tech"
+        / "Old Folder Name"
+        / "Season 2026"
+        / "2026-11-08 - Video After Rename [vid_renamed_1].mp4"
+    )
+    dummy_video_path.parent.mkdir(parents=True, exist_ok=True)
+    dummy_video_path.write_bytes(b"dummy mp4")
+
+    mock_downloader.async_download = AsyncMock(
+        return_value=DownloadResult(
+            id="vid_renamed_1",
+            metadata=mock_downloader.async_extract_info.return_value,
+            video_path=dummy_video_path,
+            thumbnail_path=None,
+            subtitle_paths=[],
+            file_size=len(b"dummy mp4"),
+        )
+    )
+
+    worker = BackgroundWorker(
+        queue=queue,
+        downloader_service=mock_downloader,
+        layout=layout,
+        nfo=nfo,
+        database=temp_db,
+    )
+
+    job = queue.enqueue(
+        "download_video",
+        {
+            "video_id": "vid_renamed_1",
+            "channel_id": "UCrename123",
+        },
+    )
+    assert job is not None
+
+    processed = asyncio.run(worker.process_next_job())
+    assert processed is True
+
+    # Folder continuity: no 'New Channel Name' directory created
+    new_dir = media_dir / "tech" / "New Channel Name"
+    assert not new_dir.exists()
+
+    # Old directory was used
+    old_dir = media_dir / "tech" / "Old Folder Name"
+    assert old_dir.exists()
+
+    # Database updated channel name, preserved folder_name
+    with temp_db.connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, folder_name FROM channels WHERE id = 'UCrename123'")
+        row = cursor.fetchone()
+        assert row["name"] == "New Channel Name"
+        assert row["folder_name"] == "Old Folder Name"

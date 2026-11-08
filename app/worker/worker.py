@@ -343,10 +343,30 @@ class BackgroundWorker:
         pub_date = meta.upload_date or payload.get("published_at", "") or ""
         year = pub_date[:4] if len(pub_date) >= 4 and pub_date[:4].isdigit() else "Unknown"
 
+        # Check existing channel in database to guarantee folder continuity across name changes
+        folder_name = channel_name
+        existing_channel = None
+        if channel_id and channel_id != "unknown_channel":
+            with self.db.connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    "SELECT id, name, folder_name, library FROM channels WHERE id = ?",
+                    (channel_id,),
+                )
+                existing_channel = cursor.fetchone()
+
+        if existing_channel:
+            folder_name = (
+                existing_channel["folder_name"] or existing_channel["name"] or channel_name
+            )
+            # Preserve existing library assignment if not explicitly specified in payload
+            if not payload.get("library") and existing_channel["library"]:
+                library = existing_channel["library"]
+
         # Step 2: Ensure channel folder, artwork (first download) and tvshow.nfo
-        channel_dir = self.layout.ensure_channel_structure(channel_name, library=library)
+        channel_dir = self.layout.ensure_channel_structure(folder_name, library=library)
         channel_plot = ""
-        if not self.layout.get_channel_poster_path(channel_name, library=library).exists():
+        if not self.layout.get_channel_poster_path(folder_name, library=library).exists():
             channel_url = (
                 f"https://www.youtube.com/channel/{channel_id}"
                 if channel_id.startswith("UC")
@@ -355,7 +375,7 @@ class BackgroundWorker:
             channel_plot = await self._fetch_channel_artwork(
                 channel_url, channel_dir, DownloadOptions(**opts_kwargs)
             )
-        ch_nfo_path = self.layout.get_channel_nfo_path(channel_name, library=library)
+        ch_nfo_path = self.layout.get_channel_nfo_path(folder_name, library=library)
         if not ch_nfo_path.exists():
             self.nfo.write_tvshow_nfo(
                 dest_path=ch_nfo_path,
@@ -364,7 +384,7 @@ class BackgroundWorker:
                 channel_id=channel_id,
             )
 
-        season_dir = self.layout.ensure_season_structure(channel_name, year, library=library)
+        season_dir = self.layout.ensure_season_structure(folder_name, year, library=library)
         video_filename = self.layout.get_video_filename(
             date_str=pub_date,
             title=meta.title,
@@ -433,25 +453,37 @@ class BackgroundWorker:
         # Step 6: Upsert video record in database
         auto_download = 1 if payload.get("auto_download") else 0
         with self.db.connection() as conn:
-            # Check or create channel if not present (never auto-subscribe from one-off downloads)
-            conn.execute(
-                """
-                INSERT OR IGNORE INTO channels (
-                    id, name, url, folder_name, library, auto_download, created_at, updated_at
+            if existing_channel:
+                # Update display name if it changed on YouTube, keeping folder_name intact
+                if meta.channel and existing_channel["name"] != meta.channel:
+                    conn.execute(
+                        """
+                        UPDATE channels
+                        SET name = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (meta.channel, now, channel_id),
+                    )
+            else:
+                # Create channel if missing (never auto-subscribe from one-off downloads)
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO channels (
+                        id, name, url, folder_name, library, auto_download, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        channel_id,
+                        channel_name,
+                        meta.channel_url or f"https://www.youtube.com/channel/{channel_id}",
+                        folder_name,
+                        library,
+                        auto_download,
+                        now,
+                        now,
+                    ),
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    channel_id,
-                    channel_name,
-                    meta.channel_url or f"https://www.youtube.com/channel/{channel_id}",
-                    channel_name,
-                    library,
-                    auto_download,
-                    now,
-                    now,
-                ),
-            )
 
             # Upsert video record (keeps is_pinned and created_at on re-download)
             conn.execute(
