@@ -139,11 +139,20 @@ async def add_subscription(
     cursor = db_conn.cursor()
     cursor.execute(
         """
-        INSERT OR REPLACE INTO channels (
+        INSERT INTO channels (
             id, name, url, feed_url, folder_name, library,
             retention_count, retention_days, auto_download
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)
+        ON CONFLICT(id) DO UPDATE SET
+            name = excluded.name,
+            url = excluded.url,
+            feed_url = excluded.feed_url,
+            library = excluded.library,
+            retention_count = excluded.retention_count,
+            retention_days = excluded.retention_days,
+            auto_download = excluded.auto_download,
+            updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         """,
         (
             channel_id,

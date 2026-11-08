@@ -126,7 +126,6 @@ def test_a1_quick_download_uses_channel_from_metadata(
     assert row["channel_id"] == "UCsynthetic0001"
 
 
-@pytest.mark.xfail(strict=True, reason="A2: re-subscribing deletes all videos (REPLACE→CASCADE)")
 def test_a2_resubscribe_keeps_videos(test_client: TestClient, temp_db: Database) -> None:
     form = {
         "channel_input": "UCresub0001",
