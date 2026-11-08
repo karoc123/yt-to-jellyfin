@@ -1,0 +1,216 @@
+"""Background worker processing SQLite jobs queue."""
+
+import asyncio
+import logging
+from pathlib import Path
+from typing import Any
+
+from app.db.database import Database, db
+from app.downloader.options import DownloadOptions
+from app.downloader.service import YtDlpService, downloader
+from app.jellyfin import JellyfinLayout, NfoGenerator, jellyfin_layout, nfo_generator
+from app.worker.models import Job, utc_now_str
+from app.worker.queue import JobQueue
+
+logger = logging.getLogger(__name__)
+
+
+class BackgroundWorker:
+    """Consumes and executes jobs from the SQLite queue with crash recovery and progress."""
+
+    def __init__(
+        self,
+        queue: JobQueue | None = None,
+        downloader_service: YtDlpService = downloader,
+        layout: JellyfinLayout = jellyfin_layout,
+        nfo: NfoGenerator = nfo_generator,
+        database: Database = db,
+        poll_interval: float = 2.0,
+    ) -> None:
+        self.db = database
+        self.queue = queue or JobQueue(self.db)
+        self.downloader = downloader_service
+        self.layout = layout
+        self.nfo = nfo
+        self.poll_interval = poll_interval
+        self._running = False
+        self._task: asyncio.Task | None = None
+
+    def start(self) -> None:
+        """Start worker in an asyncio background task."""
+        if self._running:
+            return
+        # Crash recovery: reset stuck 'running' jobs to 'pending'
+        self.queue.recover_crashed_jobs()
+        self._running = True
+        self._task = asyncio.create_task(self._run_loop())
+        logger.info("BackgroundWorker started with poll_interval=%.1fs", self.poll_interval)
+
+    async def stop(self) -> None:
+        """Gracefully stop the worker loop."""
+        self._running = False
+        if self._task:
+            self._task.cancel()
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
+            self._task = None
+        logger.info("BackgroundWorker stopped")
+
+    async def _run_loop(self) -> None:
+        """Continuous execution loop."""
+        while self._running:
+            try:
+                processed = await self.process_next_job()
+                if not processed:
+                    await asyncio.sleep(self.poll_interval)
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:
+                logger.error("Unexpected error in worker loop: %s", exc)
+                await asyncio.sleep(self.poll_interval)
+
+    async def process_next_job(self) -> bool:
+        """Fetch and execute the next pending job. Returns True if a job was processed."""
+        job = self.queue.claim_next_job()
+        if not job:
+            return False
+
+        logger.info("Processing job %s (type: %s)", job.id, job.type)
+        try:
+            if job.type == "download_video":
+                await self._handle_download_video(job)
+            else:
+                logger.warning("Unknown job type: %s", job.type)
+                self.queue.mark_failed(job.id, f"Unknown job type: {job.type}")
+                return True
+
+            self.queue.mark_completed(job.id)
+            logger.info("Completed job %s successfully", job.id)
+            return True
+        except Exception as exc:
+            logger.error("Job %s failed: %s", job.id, exc)
+            self.queue.mark_failed(job.id, str(exc))
+            return True
+
+    async def _handle_download_video(self, job: Job) -> None:
+        """Execute video download, layout organization, NFO writing, and DB record creation."""
+        payload = job.payload
+        url = payload.get("url") or f"https://www.youtube.com/watch?v={payload.get('video_id')}"
+        channel_id = payload.get("channel_id") or "unknown_channel"
+        channel_name = payload.get("channel_name") or "Unknown Channel"
+        library = payload.get("library") or "default"
+
+        # Read format and SponsorBlock settings from payload or defaults
+        max_height = payload.get("max_height")
+        sponsorblock_remove = payload.get("sponsorblock_remove", [])
+        sponsorblock_mark = payload.get("sponsorblock_mark", [])
+
+        # Step 1: Ensure channel folder and write channel tvshow.nfo if missing
+        self.layout.ensure_channel_structure(channel_name, library=library)
+        ch_nfo_path = self.layout.get_channel_nfo_path(channel_name, library=library)
+        if not ch_nfo_path.exists():
+            self.nfo.write_tvshow_nfo(
+                dest_path=ch_nfo_path,
+                title=channel_name,
+                channel_id=channel_id,
+            )
+
+        # Step 2: Extract metadata first (to know publish date/year for Season directory)
+        meta = await self.downloader.async_extract_info(url)
+        pub_date = meta.upload_date or payload.get("published_at", "") or ""
+        year = pub_date[:4] if len(pub_date) >= 4 and pub_date[:4].isdigit() else "Unknown"
+
+        season_dir = self.layout.ensure_season_structure(channel_name, year, library=library)
+        video_filename = self.layout.get_video_filename(
+            date_str=pub_date,
+            title=meta.title,
+            video_id=meta.id,
+            extension="mp4",
+        )
+        base_template = f"{Path(video_filename).stem}.%(ext)s"
+
+        # Step 3: Configure download options with Season destination and format/SponsorBlock
+        dl_options = DownloadOptions(
+            output_dir=season_dir,
+            output_template=base_template,
+            max_height=max_height,
+            sponsorblock_remove=sponsorblock_remove,
+            sponsorblock_mark=sponsorblock_mark,
+        )
+
+        # Progress reporting callback
+        def _on_progress(update: Any) -> None:
+            if hasattr(update, "percentage"):
+                self.queue.update_progress(job.id, int(update.percentage))
+
+        # Step 4: Execute download
+        result = await self.downloader.async_download(
+            url=url,
+            options=dl_options,
+            progress_hook=lambda d: None,  # yt-dlp internal hook
+        )
+
+        # Step 5: Write episode .nfo companion metadata
+        ep_nfo_path = self.layout.get_episode_nfo_path(result.video_path)
+        self.nfo.write_episode_nfo(
+            dest_path=ep_nfo_path,
+            title=meta.title,
+            plot=meta.description,
+            aired=meta.upload_date,
+            season=int(year) if year.isdigit() else 1,
+            duration_seconds=meta.duration,
+            video_id=meta.id,
+            channel_name=channel_name,
+            webpage_url=meta.webpage_url,
+            thumbnail_url=meta.thumbnail_url,
+            tags=meta.tags,
+        )
+
+        # Step 6: Upsert video record in database
+        now = utc_now_str()
+        with self.db.connection() as conn:
+            # Check or create channel if not present
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO channels (
+                    id, name, url, folder_name, library, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    channel_id,
+                    channel_name,
+                    meta.channel_url or f"https://www.youtube.com/channel/{channel_id}",
+                    channel_name,
+                    library,
+                    now,
+                    now,
+                ),
+            )
+
+            # Insert video record
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO videos (
+                    id, channel_id, title, description, published_at, duration,
+                    file_path, nfo_path, thumbnail_path, file_size, status, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
+                """,
+                (
+                    result.id,
+                    channel_id,
+                    meta.title,
+                    meta.description,
+                    meta.upload_date or now,
+                    meta.duration,
+                    str(result.video_path),
+                    str(ep_nfo_path),
+                    str(result.thumbnail_path) if result.thumbnail_path else None,
+                    result.file_size,
+                    now,
+                    now,
+                ),
+            )

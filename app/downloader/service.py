@@ -132,13 +132,25 @@ class YtDlpService:
             "subtitle": str(output_dir / sub_template),
         }
 
+        # Format selector with optional max_height constraint
+        format_str = options.format_selector
+        if options.max_height:
+            h = options.max_height
+            format_str = f"bestvideo*[height<={h}]+bestaudio/best[height<={h}]/best"
+
         ydl_opts: dict[str, Any] = {
             "outtmpl": outtmpl,
             "quiet": True,
             "no_warnings": True,
-            "format": options.format_selector,
+            "format": format_str,
             "merge_output_format": options.merge_output_format,
         }
+
+        # SponsorBlock integration
+        if options.sponsorblock_remove:
+            ydl_opts["sponsorblock_remove"] = options.sponsorblock_remove
+        if options.sponsorblock_mark:
+            ydl_opts["sponsorblock_mark"] = options.sponsorblock_mark
 
         # Subtitle settings (.vtt)
         if options.download_subtitles:

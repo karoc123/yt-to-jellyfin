@@ -46,7 +46,12 @@ class DownloadOptions:
 
     # Quality & Formats
     format_selector: str = "bestvideo*+bestaudio/best"
+    max_height: int | None = None
     merge_output_format: str = "mp4"
+
+    # SponsorBlock
+    sponsorblock_remove: list[str] = field(default_factory=list)
+    sponsorblock_mark: list[str] = field(default_factory=list)
 
     # Execution overrides
     ffmpeg_path: str | None = None
