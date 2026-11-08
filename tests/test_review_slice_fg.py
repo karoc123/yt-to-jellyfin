@@ -255,7 +255,6 @@ def test_f1_video_action_redirects_back_to_channel(
 # --- F2: one source of truth for the library ------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="F2: nav links drop the active lib")
 @pytest.mark.parametrize("path", ["/", "/browser", "/subscriptions"])
 def test_f2_nav_links_carry_active_library(client: TestClient, path: str) -> None:
     response = client.get(f"{path}?lib=kids")
@@ -266,7 +265,6 @@ def test_f2_nav_links_carry_active_library(client: TestClient, path: str) -> Non
         assert "lib=kids" in href, href
 
 
-@pytest.mark.xfail(strict=True, reason="F2: app.js keeps the library in localStorage")
 def test_f2_app_js_does_not_use_local_storage() -> None:
     assert "localStorage" not in APP_JS.read_text(encoding="utf-8")
 

@@ -8,24 +8,25 @@
   <script src="/static/js/app.js" defer></script>
 </head>
 <body>
+  {% set lib_qs = '?lib=' ~ (current_lib|urlencode) if current_lib and current_lib != 'all' else '' %}
   <header>
     <div class="header-container">
-      <a href="/" class="logo">
+      <a href="/{{ lib_qs }}" class="logo">
         <span>🎬</span> yt-to-jellyfin
       </a>
 
-      <!-- Library Switcher Pills -->
+      <!-- Library Switcher Pills: the active library lives in the URL (?lib=) only -->
       <div class="library-switcher" id="lib-switcher">
-        <button type="button" class="lib-pill" data-lib="all">🌐 Alle</button>
+        <a href="{{ request.url.path }}" class="lib-pill {% if not current_lib or current_lib == 'all' %}active{% endif %}">🌐 Alle</a>
         {% for lib in library_options() %}
-        <button type="button" class="lib-pill" data-lib="{{ lib.name }}">{{ lib.icon }} {{ lib.label }}</button>
+        <a href="{{ request.url.path }}?lib={{ lib.name|urlencode }}" class="lib-pill {% if current_lib == lib.name %}active{% endif %}">{{ lib.icon }} {{ lib.label }}</a>
         {% endfor %}
       </div>
 
       <nav class="nav-links">
-        <a href="/" class="nav-link {% if active_page == 'home' %}active{% endif %}">Download</a>
-        <a href="/browser" class="nav-link {% if active_page == 'browser' %}active{% endif %}">Mediathek</a>
-        <a href="/subscriptions" class="nav-link {% if active_page == 'subscriptions' %}active{% endif %}">Abos & Queue</a>
+        <a href="/{{ lib_qs }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Download</a>
+        <a href="/browser{{ lib_qs }}" class="nav-link {% if active_page == 'browser' %}active{% endif %}">Mediathek</a>
+        <a href="/subscriptions{{ lib_qs }}" class="nav-link {% if active_page == 'subscriptions' %}active{% endif %}">Abos & Queue</a>
       </nav>
     </div>
   </header>

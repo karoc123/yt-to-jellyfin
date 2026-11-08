@@ -1,48 +1,3 @@
-// Library management and UI state persistence
-const STORAGE_KEY = "yt2jellyfin_active_lib";
-
-function getActiveLibrary() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const paramLib = urlParams.get("lib");
-  if (paramLib) {
-    localStorage.setItem(STORAGE_KEY, paramLib);
-    return paramLib;
-  }
-  return localStorage.getItem(STORAGE_KEY) || "all";
-}
-
-function setActiveLibrary(libName) {
-  localStorage.setItem(STORAGE_KEY, libName);
-  const currentUrl = new URL(window.location.href);
-  if (libName === "all") {
-    currentUrl.searchParams.delete("lib");
-  } else {
-    currentUrl.searchParams.set("lib", libName);
-  }
-  window.location.href = currentUrl.toString();
-}
-
-function initLibrarySwitcher() {
-  const activeLib = getActiveLibrary();
-  document.querySelectorAll(".lib-pill").forEach((pill) => {
-    if (pill.dataset.lib === activeLib) {
-      pill.classList.add("active");
-    } else {
-      pill.classList.remove("active");
-    }
-    pill.addEventListener("click", () => {
-      setActiveLibrary(pill.dataset.lib);
-    });
-  });
-
-  // Also preselect hidden library inputs in forms
-  document.querySelectorAll('input[name="library"]').forEach((input) => {
-    if (activeLib !== "all") {
-      input.value = activeLib;
-    }
-  });
-}
-
 function toggleAdvancedOptions() {
   const adv = document.getElementById("advanced-options");
   if (adv) {
@@ -139,7 +94,3 @@ async function bulkPinVideos(pinState) {
     alert("Netzwerkfehler: " + err);
   }
 }
-
-document.addEventListener("DOMContentLoaded", () => {
-  initLibrarySwitcher();
-});
