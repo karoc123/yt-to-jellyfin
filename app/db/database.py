@@ -1,24 +1,24 @@
 """SQLite database manager with WAL mode, foreign keys, and migration system."""
 
 import logging
-import os
 import re
 import sqlite3
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_DB_PATH = os.environ.get("DATABASE_PATH", "data/app.db")
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 
 class Database:
     """Lightweight SQLite database wrapper with migration support."""
 
-    def __init__(self, db_path: str | Path = DEFAULT_DB_PATH) -> None:
-        self.db_path = Path(db_path)
+    def __init__(self, db_path: str | Path | None = None) -> None:
+        self.db_path = Path(db_path if db_path is not None else settings.database_path)
 
     def _ensure_dir(self) -> None:
         """Ensure parent directory for the database file exists."""

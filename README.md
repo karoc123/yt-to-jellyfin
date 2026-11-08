@@ -86,10 +86,13 @@ Open **`http://<your-server-ip>:8099`** in your browser.
 | Environment Variable | Default | Description |
 |---|---|---|
 | `MEDIA_PATH` | `/media` | Root folder where Jellyfin library folders (`default`, `kids`, etc.) are created |
-| `DATABASE_PATH` | `data/app.db` | Path to SQLite database |
-| `COOKIES_PATH` | *None* | Path to Netscape `cookies.txt` file for member or age-restricted videos |
+| `DATABASE_PATH` | `/data/app.db` | Path to SQLite database (set e.g. `data/app.db` for local dev) |
+| `COOKIES_PATH` | `/data/cookies.txt` | Netscape `cookies.txt` for member or age-restricted videos (used only if the file exists) |
 | `FORMAT_SORT` | *None* | Custom `yt-dlp` format sorting criteria (e.g. `res:1080,fps,codec:h264`) |
 | `THROTTLED_RATE_BYTES` | *None* | Download speed throttle in bytes/second |
+| `RSS_POLL_INTERVAL` | `900` | Seconds between RSS polls / retention runs |
+| `RETENTION_DAYS` | *None* | Global default: delete unpinned videos older than N days (channel rule wins) |
+| `RETENTION_COUNT` | *None* | Global default: keep only the latest N videos per channel (channel rule wins) |
 | `TZ` | `Europe/Berlin` | Container timezone |
 
 ---

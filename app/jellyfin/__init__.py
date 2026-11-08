@@ -2,7 +2,6 @@
 
 from app.jellyfin.layout import (
     DEFAULT_LIBRARY_NAME,
-    DEFAULT_MEDIA_PATH,
     JellyfinLayout,
     sanitize_filename,
 )
@@ -17,7 +16,6 @@ nfo_generator = NfoGenerator()
 
 __all__ = [
     "DEFAULT_LIBRARY_NAME",
-    "DEFAULT_MEDIA_PATH",
     "JellyfinLayout",
     "NfoGenerator",
     "generate_episodedetails_nfo",

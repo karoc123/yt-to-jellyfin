@@ -3,7 +3,6 @@
 import asyncio
 import glob
 import logging
-import os
 import shutil
 from collections.abc import Callable
 from pathlib import Path
@@ -12,6 +11,7 @@ from typing import Any
 import yt_dlp
 from yt_dlp.utils import DownloadError, ExtractorError
 
+from app.core.config import settings
 from app.downloader.exceptions import (
     CookieError,
     DownloadFailedError,
@@ -26,8 +26,6 @@ from app.downloader.options import (
 )
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_COOKIES_PATH = Path(os.environ.get("COOKIES_PATH", "/data/cookies.txt"))
 
 
 def parse_metadata(info_dict: dict[str, Any]) -> VideoMetadata:
@@ -418,7 +416,7 @@ class YtDlpService:
     @staticmethod
     def import_cookies(
         content: str | bytes,
-        dest_path: Path | str = DEFAULT_COOKIES_PATH,
+        dest_path: Path | str | None = None,
     ) -> Path:
         """Import and save cookies.txt file with secure permissions.
 
@@ -435,7 +433,7 @@ class YtDlpService:
         if not lines:
             raise CookieError("No valid lines found in cookies content.")
 
-        target = Path(dest_path)
+        target = Path(dest_path if dest_path is not None else settings.cookies_path)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(stripped + "\n", encoding="utf-8")
 

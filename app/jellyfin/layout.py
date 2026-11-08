@@ -1,10 +1,10 @@
 """Filesystem layout manager for Jellyfin-compliant TV Show libraries."""
 
-import os
 import re
 from pathlib import Path
 
-DEFAULT_MEDIA_PATH = Path(os.environ.get("MEDIA_PATH", "/media"))
+from app.core.config import settings
+
 DEFAULT_LIBRARY_NAME = "default"
 
 
@@ -27,8 +27,17 @@ def sanitize_filename(name: str) -> str:
 class JellyfinLayout:
     """Manages directory and file paths conforming to Jellyfin's TV Show structure."""
 
-    def __init__(self, media_root: Path | str = DEFAULT_MEDIA_PATH) -> None:
-        self.media_root = Path(media_root)
+    def __init__(self, media_root: Path | str | None = None) -> None:
+        self._media_root = Path(media_root) if media_root is not None else None
+
+    @property
+    def media_root(self) -> Path:
+        """Explicit root, or `settings.media_dir` read at call time."""
+        return self._media_root if self._media_root is not None else settings.media_dir
+
+    @media_root.setter
+    def media_root(self, value: Path | str) -> None:
+        self._media_root = Path(value)
 
     def get_library_dir(self, library: str = DEFAULT_LIBRARY_NAME) -> Path:
         """Return the root path for a given media library folder."""

@@ -32,7 +32,7 @@ Run `migrate-tubearchivist --help` or `python -m app.migration.tubearchivist --h
 | `--library` | `-l` | `default` | Target library name (e.g. `default`, `kids`, `dokus`, `tech`) |
 | `--mode` | `-m` | `copy` | File operation mode: `copy`, `move`, `hardlink`, or `symlink` |
 | `--dry-run` | | `False` | Preview scanned items and migration actions without modifying files or database |
-| `--db` | | `data/app.db` | Custom path to SQLite database file |
+| `--db` | | `DATABASE_PATH` or `/data/app.db` | Custom path to SQLite database file |
 
 ---
 

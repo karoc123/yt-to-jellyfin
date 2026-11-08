@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 import defusedxml.ElementTree as DefusedET
 import httpx
 
+from app.core.config import settings
 from app.db.database import Database, db
 from app.retention.engine import parse_published
 from app.worker.models import MAX_VIDEO_ATTEMPTS, utc_now_str
@@ -18,6 +19,13 @@ logger = logging.getLogger(__name__)
 ATOM_NS = "http://www.w3.org/2005/Atom"
 YT_NS = "http://www.youtube.com/xml/schemas/2015"
 MEDIA_NS = "http://search.yahoo.com/mrss/"
+
+
+def _rule(channel_value: int | None, default: int | None) -> int:
+    """Effective retention value; `0` means unlimited."""
+    value = channel_value if channel_value is not None else default
+    return value if value and value > 0 else 0
+
 
 NAMESPACES = {
     "atom": ATOM_NS,
@@ -169,8 +177,9 @@ class SubscriptionPoller:
             feed_url = ch["feed_url"] or self.get_feed_url(channel_id)
             library = ch["library"] or "default"
             channel_name = ch["name"]
-            ttl_days = ch["retention_days"] or 0
-            max_count = ch["retention_count"] or 0
+            # Channel rule (NULL = not set) falls back to the global default from settings
+            ttl_days = _rule(ch["retention_days"], settings.retention_days)
+            max_count = _rule(ch["retention_count"], settings.retention_count)
 
         content = self.fetch_feed_content(feed_url)
         if not content:

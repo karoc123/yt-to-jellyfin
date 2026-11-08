@@ -6,12 +6,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from app.core.config import settings
 from app.db.database import Database, db
 from app.downloader.exceptions import VideoUnavailableError
 from app.downloader.options import DownloadOptions
 from app.downloader.service import YtDlpService, downloader
 from app.jellyfin import JellyfinLayout, NfoGenerator, jellyfin_layout, nfo_generator
-from app.retention.engine import RetentionEngine
+from app.retention.engine import RetentionConfig, RetentionEngine
 from app.worker.models import MAX_VIDEO_ATTEMPTS, Job, utc_now_str
 from app.worker.poller import SubscriptionPoller
 from app.worker.queue import JobQueue
@@ -89,7 +90,12 @@ class BackgroundWorker:
                 poller = SubscriptionPoller(queue=self.queue, database=self.db)
                 await asyncio.to_thread(poller.poll_all_channels)
             elif job.type == "retention":
-                await asyncio.to_thread(RetentionEngine(database=self.db).evaluate_all_channels)
+                global_config = RetentionConfig(
+                    max_days=settings.retention_days, max_count=settings.retention_count
+                )
+                await asyncio.to_thread(
+                    RetentionEngine(database=self.db).evaluate_all_channels, global_config
+                )
             else:
                 logger.warning("Unknown job type: %s", job.type)
                 self.queue.mark_failed(job.id, f"Unknown job type: {job.type}")

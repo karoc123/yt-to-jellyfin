@@ -19,10 +19,12 @@ class Scheduler:
     def __init__(
         self,
         queue: JobQueue | None = None,
-        interval_seconds: float = settings.rss_poll_interval_seconds,
+        interval_seconds: float | None = None,
     ) -> None:
         self.queue = queue or JobQueue()
-        self.interval_seconds = interval_seconds
+        self.interval_seconds = (
+            interval_seconds if interval_seconds is not None else settings.rss_poll_interval_seconds
+        )
         self._task: asyncio.Task | None = None
 
     def tick(self) -> None:

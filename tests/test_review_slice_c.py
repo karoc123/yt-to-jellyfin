@@ -78,7 +78,6 @@ def _run_worker_download(temp_db: Database, tmp_path: Path) -> DownloadOptions:
 # --- C1: one settings source, env names as documented -------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="C1: Settings reads MEDIA_DIR instead of MEDIA_PATH")
 def test_c1_settings_media_dir_uses_media_path(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -88,7 +87,6 @@ def test_c1_settings_media_dir_uses_media_path(
     assert Settings().media_dir == media
 
 
-@pytest.mark.xfail(strict=True, reason="C1: Database default path differs from settings")
 def test_c1_database_default_matches_settings() -> None:
     assert Database().db_path == Path(config.settings.database_path)
 

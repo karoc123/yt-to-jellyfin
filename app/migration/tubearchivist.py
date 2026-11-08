@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
+from app.core.config import settings
 from app.db.database import Database, db
 from app.jellyfin.layout import JellyfinLayout, sanitize_filename
 from app.jellyfin.nfo import NfoGenerator
@@ -56,7 +57,7 @@ class TubeArchivistMigrator:
     def __init__(
         self,
         source_dir: Path | str | None = None,
-        dest_media_root: Path | str = "/media",
+        dest_media_root: Path | str | None = None,
         library: str = "default",
         mode: str = "copy",
         dry_run: bool = False,
@@ -64,7 +65,9 @@ class TubeArchivistMigrator:
         database: Database | None = None,
     ) -> None:
         self.source_dir = Path(source_dir) if source_dir else None
-        self.dest_media_root = Path(dest_media_root)
+        self.dest_media_root = Path(
+            dest_media_root if dest_media_root is not None else settings.media_dir
+        )
         self.library = library or "default"
         self.mode = mode.lower()
         if self.mode not in {"copy", "move", "hardlink", "symlink"}:
@@ -426,7 +429,7 @@ def main() -> None:
     parser.add_argument(
         "--dest",
         "-d",
-        default=os.environ.get("MEDIA_PATH", "/media"),
+        default=str(settings.media_dir),
         help="Destination Jellyfin media root directory (default: MEDIA_PATH or /media)",
     )
     parser.add_argument(
