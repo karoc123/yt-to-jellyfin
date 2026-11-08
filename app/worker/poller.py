@@ -4,11 +4,13 @@ import logging
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 
 import defusedxml.ElementTree as DefusedET
 import httpx
 
 from app.core.config import settings
+from app.core.settings_service import settings_service
 from app.db.database import Database, db
 from app.retention.engine import parse_published
 from app.worker.models import MAX_VIDEO_ATTEMPTS, utc_now_str
@@ -123,14 +125,22 @@ class SubscriptionPoller:
         queue: JobQueue,
         database: Database = db,
         client: httpx.Client | None = None,
-        ignore_shorts: bool = True,
-        ignore_live: bool = True,
+        ignore_shorts: bool | None = None,
+        ignore_live: bool | None = None,
     ) -> None:
         self.queue = queue
         self.db = database
         self._client = client
-        self.ignore_shorts = ignore_shorts
-        self.ignore_live = ignore_live
+        self.ignore_shorts = (
+            ignore_shorts
+            if ignore_shorts is not None
+            else settings_service.get_setting_bool("ignore_shorts", default=True)
+        )
+        self.ignore_live = (
+            ignore_live
+            if ignore_live is not None
+            else settings_service.get_setting_bool("ignore_live", default=True)
+        )
 
     @staticmethod
     def get_feed_url(channel_id: str) -> str:
@@ -177,9 +187,15 @@ class SubscriptionPoller:
             feed_url = ch["feed_url"] or self.get_feed_url(channel_id)
             library = ch["library"] or "default"
             channel_name = ch["name"]
-            # Channel rule (NULL = not set) falls back to the global default from settings
-            ttl_days = _rule(ch["retention_days"], settings.retention_days)
-            max_count = _rule(ch["retention_count"], settings.retention_count)
+            # Channel rule (NULL = not set) falls back to the global default from DB/settings
+            default_days = settings_service.get_setting_int(
+                "retention_days", settings.retention_days
+            )
+            default_count = settings_service.get_setting_int(
+                "retention_count", settings.retention_count
+            )
+            ttl_days = _rule(ch["retention_days"], default_days)
+            max_count = _rule(ch["retention_count"], default_count)
 
         content = self.fetch_feed_content(feed_url)
         if not content:
@@ -233,18 +249,23 @@ class SubscriptionPoller:
                 candidates = self._newest_within_count(cursor, channel_id, candidates, max_count)
 
         for entry in candidates:
+            payload: dict[str, Any] = {
+                "video_id": entry.video_id,
+                "url": entry.link,
+                "title": entry.title,
+                "channel_id": channel_id,
+                "channel_name": channel_name,
+                "library": library,
+                "published_at": entry.published,
+            }
+            if settings_service.get_setting_bool("sponsorblock_enabled", default=True):
+                cats = settings_service.get_setting("sponsorblock_categories", "sponsor,intro")
+                payload["sponsorblock_remove"] = [c.strip() for c in cats.split(",") if c.strip()]
+
             # Enqueue download job with video_id deduplication
             job = self.queue.enqueue(
                 job_type="download_video",
-                payload={
-                    "video_id": entry.video_id,
-                    "url": entry.link,
-                    "title": entry.title,
-                    "channel_id": channel_id,
-                    "channel_name": channel_name,
-                    "library": library,
-                    "published_at": entry.published,
-                },
+                payload=payload,
                 deduplicate_key="video_id",
             )
             if job:

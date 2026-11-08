@@ -7,14 +7,26 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from pydantic import BaseModel
 
 from app.core.config import settings
+from app.core.settings_service import settings_service, test_jellyfin_connection
 from app.db import db, get_db
+from app.downloader.exceptions import CookieError
 from app.downloader.options import DownloadOptions
-from app.downloader.service import downloader
+from app.downloader.service import YtDlpService, downloader
 from app.jellyfin import jellyfin_layout
 from app.migration.subscriptions import SubscriptionsMigrator
 from app.retention import retention_engine
@@ -61,7 +73,8 @@ async def create_download_job(
     if max_height and max_height.strip().isdigit():
         payload["max_height"] = int(max_height)
     if sponsorblock:
-        payload["sponsorblock_remove"] = ["sponsor", "intro"]
+        cats = settings_service.get_setting("sponsorblock_categories", "sponsor,intro")
+        payload["sponsorblock_remove"] = [c.strip() for c in cats.split(",") if c.strip()]
 
     queue.enqueue("download_video", payload)
     return redirect_to("/", chosen_lib, msg="download_queued")
@@ -394,3 +407,220 @@ async def import_subscriptions(
 
     imported = await asyncio.to_thread(migrator.import_channels, channels, library=library)
     return redirect_to("/subscriptions", library, msg="imported", n=imported)
+
+
+@router.post("/settings/cookies")
+async def update_cookies(
+    file: UploadFile | None = File(None),
+    cookies: str = Form(""),
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Save or update cookies.txt from file upload or textarea."""
+    content = ""
+    if file and file.filename:
+        raw = await file.read(2_000_000)
+        try:
+            content = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            return redirect_to("/settings", library, msg="cookies_invalid")
+    elif cookies:
+        content = cookies
+
+    content = content.strip()
+    if not content:
+        return redirect_to("/settings", library, msg="cookies_empty")
+
+    try:
+        await asyncio.to_thread(YtDlpService.import_cookies, content, settings.cookies_path)
+    except CookieError:
+        return redirect_to("/settings", library, msg="cookies_invalid")
+
+    return redirect_to("/settings", library, msg="cookies_saved")
+
+
+@router.post("/settings/cookies/delete")
+async def delete_cookies(
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Delete saved cookies file."""
+    cookies_file = Path(settings.cookies_path)
+    if cookies_file.is_file():
+        try:
+            cookies_file.unlink()
+        except OSError as exc:
+            logger.warning("Could not delete cookies file: %s", exc)
+    return redirect_to("/settings", library, msg="cookies_deleted")
+
+
+@router.post("/settings/cookies/test")
+async def test_cookies_action(
+    request: Request,
+    library: str | None = Form(None),
+) -> Response:
+    """Test validity of stored cookies against yt-dlp cookie jar."""
+    ok, message = await asyncio.to_thread(YtDlpService.test_cookies, settings.cookies_path)
+    is_htmx = request.headers.get("HX-Request") == "true"
+    if is_htmx:
+        badge_cls = "badge-status-completed" if ok else "badge-status-failed"
+        return HTMLResponse(
+            f'<div class="test-result-box {badge_cls}"><span>{message}</span></div>'
+        )
+    return redirect_to(
+        "/settings",
+        library,
+        msg="cookie_test_ok" if ok else "cookie_test_err",
+        info=message,
+    )
+
+
+@router.post("/settings/libraries")
+async def add_library(
+    name: str = Form(...),
+    label: str = Form(""),
+    icon: str = Form("📁"),
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Add a new library in the database."""
+    ok, _ = settings_service.add_library(name=name, label=label, icon=icon)
+    if not ok:
+        return redirect_to("/settings", library, msg="library_invalid")
+    return redirect_to("/settings", library, msg="library_added")
+
+
+@router.post("/settings/libraries/{name}/delete")
+async def delete_library(
+    name: str,
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Delete a library if not in use and not default."""
+    ok, _ = settings_service.delete_library(name)
+    if not ok:
+        return redirect_to("/settings", library, msg="library_delete_forbidden")
+    return redirect_to("/settings", library, msg="library_deleted")
+
+
+@router.post("/settings/retention")
+async def save_retention_settings(
+    retention_days: str = Form(""),
+    retention_count: str = Form(""),
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Save global retention settings in database."""
+    settings_service.set_settings(
+        {
+            "retention_days": retention_days.strip(),
+            "retention_count": retention_count.strip(),
+        }
+    )
+    return redirect_to("/settings", library, msg="retention_saved")
+
+
+@router.post("/settings/retention/run")
+async def trigger_retention_run(
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Manually enqueue a retention cleanup run."""
+    queue = JobQueue()
+    queue.enqueue("retention", {}, unique=True)
+    return redirect_to("/settings", library, msg="retention_triggered")
+
+
+@router.post("/settings/download")
+async def save_download_settings(
+    default_max_height: str = Form(""),
+    format_sort: str = Form(""),
+    subtitles_langs: str = Form("de,en"),
+    throttled_rate_bytes: str = Form(""),
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Save download quality and format settings in database."""
+    settings_service.set_settings(
+        {
+            "default_max_height": default_max_height.strip(),
+            "format_sort": format_sort.strip(),
+            "subtitles_langs": subtitles_langs.strip(),
+            "throttled_rate_bytes": throttled_rate_bytes.strip(),
+        }
+    )
+    return redirect_to("/settings", library, msg="download_settings_saved")
+
+
+@router.post("/settings/filters")
+async def save_filter_settings(
+    ignore_shorts: str | None = Form(None),
+    ignore_live: str | None = Form(None),
+    sponsorblock_enabled: str | None = Form(None),
+    sponsorblock_categories: str = Form("sponsor,intro"),
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Save subscription content filters and SponsorBlock settings."""
+    settings_service.set_settings(
+        {
+            "ignore_shorts": "1" if ignore_shorts else "0",
+            "ignore_live": "1" if ignore_live else "0",
+            "sponsorblock_enabled": "1" if sponsorblock_enabled else "0",
+            "sponsorblock_categories": sponsorblock_categories.strip(),
+        }
+    )
+    return redirect_to("/settings", library, msg="filter_settings_saved")
+
+
+@router.post("/settings/schedule")
+async def save_schedule_settings(
+    rss_poll_interval: str = Form("900"),
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Save RSS poll interval in seconds."""
+    settings_service.set_setting("rss_poll_interval", rss_poll_interval.strip())
+    return redirect_to("/settings", library, msg="schedule_saved")
+
+
+@router.post("/settings/poller/run")
+async def trigger_poller_run(
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Manually enqueue an RSS polling job for all subscribed channels."""
+    queue = JobQueue()
+    queue.enqueue("poll_channels", {}, unique=True)
+    return redirect_to("/settings", library, msg="poller_triggered")
+
+
+@router.post("/settings/jellyfin")
+async def save_jellyfin_settings(
+    jellyfin_url: str = Form(""),
+    jellyfin_api_key: str = Form(""),
+    library: str | None = Form(None),
+) -> RedirectResponse:
+    """Save Jellyfin server URL and API key."""
+    settings_service.set_settings(
+        {
+            "jellyfin_url": jellyfin_url.strip(),
+            "jellyfin_api_key": jellyfin_api_key.strip(),
+        }
+    )
+    return redirect_to("/settings", library, msg="jellyfin_saved")
+
+
+@router.post("/settings/jellyfin/test")
+async def test_jellyfin_action(
+    request: Request,
+    jellyfin_url: str = Form(""),
+    jellyfin_api_key: str = Form(""),
+    library: str | None = Form(None),
+) -> Response:
+    """Test Jellyfin server connectivity."""
+    url = jellyfin_url or settings_service.get_setting("jellyfin_url", "")
+    key = jellyfin_api_key or settings_service.get_setting("jellyfin_api_key", "")
+    ok, message = await test_jellyfin_connection(url, key)
+    is_htmx = request.headers.get("HX-Request") == "true"
+    if is_htmx:
+        badge_cls = "badge-status-completed" if ok else "badge-status-failed"
+        return HTMLResponse(
+            f'<div class="test-result-box {badge_cls}"><span>{message}</span></div>'
+        )
+    return redirect_to(
+        "/settings",
+        library,
+        msg="jellyfin_test_ok" if ok else "jellyfin_test_err",
+        info=message,
+    )

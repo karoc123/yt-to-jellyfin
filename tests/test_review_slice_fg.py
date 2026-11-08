@@ -255,12 +255,12 @@ def test_f1_video_action_redirects_back_to_channel(
 # --- F2: one source of truth for the library ------------------------------------------
 
 
-@pytest.mark.parametrize("path", ["/", "/browser", "/subscriptions"])
+@pytest.mark.parametrize("path", ["/", "/browser", "/subscriptions", "/settings"])
 def test_f2_nav_links_carry_active_library(client: TestClient, path: str) -> None:
     response = client.get(f"{path}?lib=kids")
     assert response.status_code == 200
     links = {link["href"].split("?")[0]: link["href"] for link in _parse(response.text).nav_links}
-    assert {"/", "/browser", "/subscriptions"} <= set(links)
+    assert {"/", "/browser", "/subscriptions", "/settings"} <= set(links)
     for href in links.values():
         assert "lib=kids" in href, href
 

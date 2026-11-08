@@ -1,5 +1,6 @@
 """HTML Web Views for Quick Download, Mediathek Browser, and Subscriptions."""
 
+import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -10,28 +11,19 @@ from fastapi.templating import Jinja2Templates
 
 from app.api.endpoints.actions import channel_poster_path
 from app.core.config import settings
+from app.core.settings_service import settings_service
 from app.db import get_db
+from app.downloader.service import YtDlpService
 from app.worker.models import Job
 
 templates_dir = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
 
-# Display labels for the default libraries; other names are shown capitalized
-_LIBRARY_LABELS = {
-    "default": ("📁", "Standard"),
-    "kids": ("🧒", "Kids"),
-    "dokus": ("📚", "Dokus"),
-    "tech": ("💻", "Tech"),
-}
-
 
 def library_options() -> list[dict[str, str]]:
-    """Libraries from settings (LIBRARIES) with icon and label, read at render time."""
-    options = []
-    for name in settings.libraries:
-        icon, label = _LIBRARY_LABELS.get(name, ("📂", name.capitalize()))
-        options.append({"name": name, "icon": icon, "label": label})
-    return options
+    """Libraries from database (or LIBRARIES override) with icon and label, read at render time."""
+    libs = settings_service.get_libraries()
+    return [{"name": item["name"], "icon": item["icon"], "label": item["label"]} for item in libs]
 
 
 templates.env.globals["library_options"] = library_options
@@ -82,17 +74,47 @@ FLASH_MESSAGES = {
     "imported": ("status", "Import abgeschlossen: {n} Kanal/Kanäle importiert."),
     "import_missing": ("alert", "Bitte eine Datei oder TubeArchivist-URL und Token angeben."),
     "ta_failed": ("alert", "TubeArchivist nicht erreichbar oder Token ungültig."),
+    "cookies_saved": ("status", "Cookies wurden erfolgreich gespeichert."),
+    "cookies_deleted": ("status", "Gespeicherte Cookies wurden gelöscht."),
+    "cookies_empty": ("alert", "Bitte eine Datei auswählen oder Cookie-Text einfügen."),
+    "cookies_invalid": (
+        "alert",
+        "Ungültiges Cookie-Format. Erwartet wird ein Netscape HTTP Cookie File.",
+    ),
+    "library_added": ("status", "Bibliothek wurde erfolgreich angelegt."),
+    "library_deleted": ("status", "Bibliothek wurde gelöscht."),
+    "library_delete_forbidden": (
+        "alert",
+        "Bibliothek kann nicht gelöscht werden (enthält noch Kanäle oder ist 'default').",
+    ),
+    "library_invalid": ("alert", "Ungültiger Bibliotheksname oder -label."),
+    "retention_saved": ("status", "Aufbewahrungsregeln wurden gespeichert."),
+    "retention_triggered": ("status", "Aufbewahrungsbereinigung wurde gestartet."),
+    "download_settings_saved": ("status", "Download- und Qualitätseinstellungen gespeichert."),
+    "filter_settings_saved": ("status", "Filter- und SponsorBlock-Einstellungen gespeichert."),
+    "poller_triggered": ("status", "Suche nach neuen Videos wurde gestartet."),
+    "schedule_saved": ("status", "Such-Intervall wurde gespeichert."),
+    "jellyfin_saved": ("status", "Jellyfin-Einstellungen wurden gespeichert."),
+    "cookie_test_ok": ("status", "{info}"),
+    "cookie_test_err": ("alert", "{info}"),
+    "jellyfin_test_ok": ("status", "{info}"),
+    "jellyfin_test_err": ("alert", "{info}"),
 }
 
 
 def flash_message(request: Request) -> dict[str, str] | None:
-    """Flash notice for the current request's `msg`/`n` query parameters, if any."""
+    """Flash notice for the current request's `msg`/`n`/`info` query parameters, if any."""
     entry = FLASH_MESSAGES.get(request.query_params.get("msg", ""))
     if not entry:
         return None
     role, text = entry
     count = request.query_params.get("n", "")
-    return {"role": role, "text": text.format(n=int(count) if count.isdigit() else 0)}
+    info = request.query_params.get("info", "")
+    try:
+        formatted = text.format(n=int(count) if count.isdigit() else 0, info=info)
+    except Exception:
+        formatted = text
+    return {"role": role, "text": formatted}
 
 
 templates.env.globals["flash_message"] = flash_message
@@ -269,5 +291,69 @@ async def view_subscriptions(
             "active_page": "subscriptions",
             "current_lib": lib or "all",
             "channels": channels,
+        },
+    )
+
+
+@router.get("/settings", response_class=HTMLResponse)
+async def view_settings(
+    request: Request,
+    lib: str | None = None,
+) -> HTMLResponse:
+    """Settings view for libraries, YouTube cookies, download quality, and retention."""
+    cookies_path = Path(settings.cookies_path)
+    cookies_saved = cookies_path.is_file()
+    cookies_valid = YtDlpService.validate_cookies_file(cookies_path) if cookies_saved else False
+
+    libraries_list = settings_service.get_libraries()
+    all_settings = settings_service.get_all_settings()
+
+    return templates.TemplateResponse(
+        request=request,
+        name="settings.html",
+        context={
+            "active_page": "settings",
+            "current_lib": lib or "all",
+            "cookies_saved": cookies_saved,
+            "cookies_valid": cookies_valid,
+            "cookies_path": str(settings.cookies_path),
+            "media_dir": str(settings.media_dir),
+            "database_path": str(settings.database_path),
+            "libraries": libraries_list,
+            "env_libraries_active": os.environ.get("LIBRARIES") is not None,
+            "retention_days": all_settings.get(
+                "retention_days",
+                str(settings.retention_days) if settings.retention_days is not None else "",
+            ),
+            "retention_count": all_settings.get(
+                "retention_count",
+                str(settings.retention_count) if settings.retention_count is not None else "",
+            ),
+            "default_max_height": all_settings.get(
+                "default_max_height",
+                str(settings.default_max_height) if settings.default_max_height is not None else "",
+            ),
+            "format_sort": all_settings.get(
+                "format_sort",
+                str(settings.format_sort) if settings.format_sort is not None else "",
+            ),
+            "subtitles_langs": all_settings.get("subtitles_langs", "de,en"),
+            "throttled_rate_bytes": all_settings.get(
+                "throttled_rate_bytes",
+                str(settings.throttled_rate_bytes)
+                if settings.throttled_rate_bytes is not None
+                else "",
+            ),
+            "ignore_shorts": settings_service.get_setting_bool("ignore_shorts", default=True),
+            "ignore_live": settings_service.get_setting_bool("ignore_live", default=True),
+            "sponsorblock_enabled": settings_service.get_setting_bool(
+                "sponsorblock_enabled", default=True
+            ),
+            "sponsorblock_categories": all_settings.get("sponsorblock_categories", "sponsor,intro"),
+            "rss_poll_interval": settings_service.get_setting_int(
+                "rss_poll_interval", settings.rss_poll_interval_seconds
+            ),
+            "jellyfin_url": all_settings.get("jellyfin_url", ""),
+            "jellyfin_api_key": all_settings.get("jellyfin_api_key", ""),
         },
     )

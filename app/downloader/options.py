@@ -61,6 +61,9 @@ class DownloadOptions:
     ffmpeg_path: str | None = None
     extra_params: dict = field(default_factory=dict)
 
+    # Error resilience (non-fatal companion downloads: subtitles, thumbnails)
+    ignore_errors: bool = True
+
 
 @dataclass
 class VideoMetadata:

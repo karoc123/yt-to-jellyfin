@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from app.core.config import settings
+from app.core.settings_service import settings_service
 from app.worker.queue import JobQueue
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,11 @@ class Scheduler:
 
     async def _run_loop(self) -> None:
         while True:
-            await asyncio.sleep(self.interval_seconds)
+            interval = settings_service.get_setting_int(
+                "rss_poll_interval", int(self.interval_seconds)
+            )
+            sleep_duration = interval if interval and interval > 0 else self.interval_seconds
+            await asyncio.sleep(sleep_duration)
             try:
                 await asyncio.to_thread(self.tick)
             except Exception as exc:

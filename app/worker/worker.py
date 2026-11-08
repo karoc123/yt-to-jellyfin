@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
+from app.core.settings_service import notify_jellyfin_refresh, settings_service
 from app.db.database import Database, db
 from app.downloader.exceptions import VideoUnavailableError
 from app.downloader.options import DownloadOptions, ProgressUpdate
@@ -107,9 +108,13 @@ class BackgroundWorker:
                 poller = SubscriptionPoller(queue=self.queue, database=self.db)
                 await asyncio.to_thread(poller.poll_all_channels)
             elif job.type == "retention":
-                global_config = RetentionConfig(
-                    max_days=settings.retention_days, max_count=settings.retention_count
+                max_days = settings_service.get_setting_int(
+                    "retention_days", settings.retention_days
                 )
+                max_count = settings_service.get_setting_int(
+                    "retention_count", settings.retention_count
+                )
+                global_config = RetentionConfig(max_days=max_days, max_count=max_count)
                 await asyncio.to_thread(
                     RetentionEngine(database=self.db).evaluate_all_channels, global_config
                 )
@@ -251,16 +256,32 @@ class BackgroundWorker:
         url = payload.get("url") or f"https://www.youtube.com/watch?v={payload.get('video_id')}"
         library = payload.get("library") or "default"
 
-        # Read format and SponsorBlock settings from payload, falling back to env settings
+        # Read format, subtitle and SponsorBlock settings from payload,
+        # falling back to DB/env settings
         format_selector = (
-            payload.get("format") or payload.get("format_selector") or settings.default_format
+            payload.get("format")
+            or payload.get("format_selector")
+            or settings_service.get_setting("default_format")
+            or settings.default_format
         )
-        format_sort = payload.get("format_sort") or settings.format_sort
-        max_height = payload.get("max_height") or settings.default_max_height
+        format_sort = (
+            payload.get("format_sort")
+            or settings_service.get_setting("format_sort")
+            or settings.format_sort
+        )
+        max_height = (
+            payload.get("max_height")
+            or settings_service.get_setting_int("default_max_height")
+            or settings.default_max_height
+        )
         throttled_rate = (
             payload.get("throttled_rate_bytes")
             or payload.get("throttled_rate")
+            or settings_service.get_setting_int("throttled_rate_bytes")
             or settings.throttled_rate_bytes
+        )
+        subtitles_langs_raw = payload.get("subtitles_langs") or settings_service.get_setting(
+            "subtitles_langs"
         )
         sponsorblock_remove = payload.get("sponsorblock_remove", [])
         sponsorblock_mark = payload.get("sponsorblock_mark", [])
@@ -271,6 +292,10 @@ class BackgroundWorker:
             "sponsorblock_remove": sponsorblock_remove,
             "sponsorblock_mark": sponsorblock_mark,
         }
+        if subtitles_langs_raw:
+            opts_kwargs["subtitles_langs"] = [
+                s.strip() for s in subtitles_langs_raw.split(",") if s.strip()
+            ]
         if format_selector:
             opts_kwargs["format_selector"] = format_selector
         if format_sort:
@@ -443,3 +468,9 @@ class BackgroundWorker:
                     now,
                 ),
             )
+
+        # Step 7: Trigger optional Jellyfin library refresh
+        try:
+            await notify_jellyfin_refresh(settings_service)
+        except Exception as jf_exc:
+            logger.debug("Jellyfin notification skipped or failed: %s", jf_exc)

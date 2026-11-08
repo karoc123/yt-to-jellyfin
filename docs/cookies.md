@@ -20,38 +20,24 @@ Certain YouTube videos require authentication to download:
 
 ---
 
-## 2. Mounting Cookies in Docker Compose
+## 2. Managing Cookies in the Web UI
 
-Place the exported `cookies.txt` into your project directory or a secure configuration folder:
+You do not need to edit `docker-compose.yml` or mount extra files to use cookies.
 
-```yaml
-services:
-  yt-to-jellyfin:
-    image: yt-to-jellyfin:latest
-    container_name: yt-to-jellyfin
-    restart: unless-stopped
-    ports:
-      - "8099:8000"
-    environment:
-      - DATABASE_PATH=/data/app.db
-      - MEDIA_PATH=/media
-      - COOKIES_PATH=/cookies/cookies.txt
-      - TZ=Europe/Berlin
-    volumes:
-      - ./data:/data
-      - ./media:/media
-      - ./cookies.txt:/cookies/cookies.txt:ro
-```
+1. Open the Web UI and navigate to **Einstellungen** (`/settings`).
+2. Under **YouTube-Authentifizierung (Cookies)**:
+   * **Option A:** Upload your exported `cookies.txt` file directly.
+   * **Option B:** Open your `cookies.txt`, copy its contents, and paste them into the textarea.
+3. Click **Cookies speichern**.
 
-Restart the container:
-```bash
-docker compose up -d
-```
+The application validates the Netscape format and saves the cookies directly to `/data/cookies.txt` with restricted permissions (`0600`). Because `./data:/data` is already mounted as a persistent volume in Docker Compose, the cookies persist across container updates and restarts automatically.
+
+To remove saved cookies, click **Gespeicherte Cookies löschen** on the same settings page.
 
 ---
 
 ## 3. Security Recommendations
 
-- Mount `cookies.txt` as read-only (`:ro`).
-- Do not commit `cookies.txt` into git (it is included in `.gitignore` by default).
-- Periodically refresh `cookies.txt` when YouTube session tokens expire.
+- Cookies are stored with `0600` permissions (read/write only by the container user).
+- Do not commit any `cookies.txt` into git (it is included in `.gitignore` by default).
+- Periodically refresh cookies when YouTube session tokens expire or downloads fail with authentication errors.

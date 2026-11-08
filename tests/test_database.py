@@ -35,13 +35,13 @@ def test_migrations_application_and_idempotency(temp_db: Database) -> None:
     assert temp_db.get_user_version() == 0
 
     applied = temp_db.run_migrations()
-    assert applied == [1, 2, 3, 4]
-    assert temp_db.get_user_version() == 4
+    assert applied == [1, 2, 3, 4, 5]
+    assert temp_db.get_user_version() == 5
 
     # Second run should apply nothing
     applied_again = temp_db.run_migrations()
     assert applied_again == []
-    assert temp_db.get_user_version() == 4
+    assert temp_db.get_user_version() == 5
 
 
 def test_schema_tables_and_constraints(temp_db: Database) -> None:

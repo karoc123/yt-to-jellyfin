@@ -60,8 +60,6 @@ services:
       - DATABASE_PATH=/data/app.db
       - MEDIA_PATH=/media
       - TZ=Europe/Berlin
-      # Optional: Netscape cookies.txt path for age/member-restricted videos
-      # - COOKIES_PATH=/cookies/cookies.txt
       # Optional: Format sort parameter (e.g. res:1080,fps)
       # - FORMAT_SORT=res:1080,fps
       # Optional: re-extract downloads slower than N bytes/sec
@@ -69,8 +67,6 @@ services:
     volumes:
       - ./data:/data
       - ./media:/media
-      # Optional: Mount cookies file as read-only
-      # - ./cookies.txt:/cookies/cookies.txt:ro
 ```
 
 Start the service:
@@ -83,6 +79,8 @@ Open **`http://<your-server-ip>:8099`** in your browser.
 
 ## ⚙️ Configuration Reference
 
+Die meisten Optionen (Bibliotheken, Cookies, Videoauflösung, Retention, SponsorBlock, Feed-Intervall und Jellyfin-Webhook) können direkt im Web UI unter **Einstellungen** (`/settings`) verwaltet werden. Die folgenden Umgebungsvariablen dienen als Startkonfiguration bzw. Fallback:
+
 | Environment Variable | Default | Description |
 |---|---|---|
 | `MEDIA_PATH` | `/media` | Root folder where Jellyfin library folders (`default`, `kids`, etc.) are created |
@@ -92,7 +90,7 @@ Open **`http://<your-server-ip>:8099`** in your browser.
 | `THROTTLED_RATE_BYTES` | *None* | Re-extract a download that drops below N bytes/second (yt-dlp `--throttled-rate`) |
 | `DEFAULT_FORMAT` | *None* | `yt-dlp` format selector (default `bestvideo*+bestaudio/best`) |
 | `DEFAULT_MAX_HEIGHT` | *None* | Maximum video height (e.g. `1080`) when the job does not set one |
-| `LIBRARIES` | `default,kids,dokus,tech` | Comma-separated library folders offered in the UI |
+| `LIBRARIES` | `default,kids,dokus,tech` | Optional: comma-separated library folders (dynamically managed in Web UI if unset) |
 | `RSS_POLL_INTERVAL` | `900` | Seconds between RSS polls / retention runs |
 | `RETENTION_DAYS` | *None* | Global default: delete unpinned videos older than N days (channel rule wins) |
 | `RETENTION_COUNT` | *None* | Global default: keep only the latest N videos per channel (channel rule wins) |
@@ -139,7 +137,7 @@ For full CLI documentation and options, see [docs/migration_tubearchivist.md](do
 
 ## 🍪 Authentication & Cookies
 
-To download age-restricted or member-only videos, mount a Netscape `cookies.txt` file exported from your browser. See [docs/cookies.md](docs/cookies.md) for step-by-step export and security guidelines.
+To download age-restricted or member-only videos, upload or paste a Netscape `cookies.txt` file directly in the Web UI under **Einstellungen** (`/settings`). Cookies are securely stored in `/data/cookies.txt` with permissions `0600` and automatically persist inside your mounted `./data` volume. See [docs/cookies.md](docs/cookies.md) for step-by-step export guidelines.
 
 ---
 

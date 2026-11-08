@@ -244,6 +244,10 @@ class YtDlpService:
         if progress_hook:
             ydl_opts["progress_hooks"] = [progress_hook]
 
+        # Error resilience (non-fatal companion downloads: subtitles, thumbnails)
+        if options.ignore_errors is not None:
+            ydl_opts["ignoreerrors"] = options.ignore_errors
+
         # Extra options overrides
         if options.extra_params:
             ydl_opts.update(options.extra_params)
@@ -285,6 +289,8 @@ class YtDlpService:
         opts = options or self.default_options
         ydl_params = self.build_ydl_opts(opts)
         ydl_params["extract_flat"] = "in_playlist"
+        # Metadata extraction must remain strict to catch VideoUnavailableError, CookieError, etc.
+        ydl_params["ignoreerrors"] = False
 
         try:
             with yt_dlp.YoutubeDL(ydl_params) as ydl:
@@ -503,7 +509,7 @@ class YtDlpService:
 
         lines = [line.strip() for line in stripped.splitlines() if line.strip()]
         # Verify that content has at least one valid line
-        if not lines:
+        if not lines or not any("\t" in line or line.startswith("#") for line in lines):
             raise CookieError("No valid lines found in cookies content.")
 
         target = Path(dest_path if dest_path is not None else settings.cookies_path)
@@ -536,6 +542,44 @@ class YtDlpService:
             )
         except Exception:
             return False
+
+    @staticmethod
+    def test_cookies(cookies_path: Path | str | None = None) -> tuple[bool, str]:
+        """Test and verify cookies against yt-dlp cookie jar."""
+        path = Path(cookies_path if cookies_path is not None else settings.cookies_path)
+        if not path.is_file():
+            return False, "Keine Cookie-Datei gefunden."
+
+        try:
+            content = path.read_text(encoding="utf-8", errors="ignore").strip()
+            if not content:
+                return False, "Die Cookie-Datei ist leer."
+
+            ydl_opts = {
+                "cookiefile": str(path),
+                "quiet": True,
+                "no_warnings": True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                cookiejar = getattr(ydl, "cookiejar", None)
+                if not cookiejar:
+                    return False, "Cookies konnten nicht geladen werden."
+
+                yt_cookies = [c for c in cookiejar if c.domain and "youtube.com" in c.domain]
+                if not yt_cookies:
+                    return False, "Keine YouTube-Cookies in der Datei gefunden."
+
+                login_cookies = [
+                    c.name
+                    for c in yt_cookies
+                    if c.name in ("LOGIN_INFO", "SID", "SSID", "SAPISID", "HSID")
+                ]
+                if login_cookies:
+                    tokens = ", ".join(sorted(set(login_cookies)))
+                    return True, f"Cookies gültig: YouTube-Login aktiv ({tokens})."
+                return True, f"Cookies geladen: {len(yt_cookies)} YouTube-Cookies vorhanden."
+        except Exception as exc:
+            return False, f"Fehler beim Prüfen der Cookies: {exc}"
 
 
 # Global default downloader service instance

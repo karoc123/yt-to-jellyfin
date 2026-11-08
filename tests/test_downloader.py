@@ -40,6 +40,7 @@ def test_build_ydl_opts_defaults(service: YtDlpService) -> None:
     assert opts["writethumbnail"] is True
     assert opts["format"] == "bestvideo*+bestaudio/best"
     assert opts["merge_output_format"] == "mp4"
+    assert opts["ignoreerrors"] is True
 
 
 def test_build_ydl_opts_rate_limit_and_sleep(service: YtDlpService) -> None:
@@ -331,3 +332,36 @@ def test_import_and_validate_cookies(tmp_path: Path) -> None:
 
     # Non-existent file
     assert YtDlpService.validate_cookies_file(tmp_path / "does_not_exist.txt") is False
+
+
+def test_ignoreerrors_configuration(service: YtDlpService, tmp_path: Path) -> None:
+    """Verify that extract_info stays strict while download uses ignoreerrors=True."""
+    mock_info = {
+        "id": "abc1234",
+        "title": "Resilience Test",
+        "uploader": "Resilience Channel",
+        "upload_date": "20261108",
+        "duration": 50,
+        "requested_downloads": [{"filepath": str(tmp_path / "video.mp4")}],
+    }
+    (tmp_path / "video.mp4").write_bytes(b"data")
+
+    with patch("yt_dlp.YoutubeDL") as mock_ydl_cls:
+        mock_ydl = MagicMock()
+        mock_ydl.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.return_value = mock_info
+        mock_ydl_cls.return_value = mock_ydl
+
+        # 1. extract_info should enforce ignoreerrors=False
+        service.extract_info("https://youtube.com/watch?v=abc1234")
+        extract_opts = mock_ydl_cls.call_args[0][0]
+        assert extract_opts["ignoreerrors"] is False
+
+        # 2. download should keep ignoreerrors=True for non-fatal subtitle/companion errors
+        mock_ydl_cls.reset_mock()
+        service.download(
+            "https://youtube.com/watch?v=abc1234",
+            options=DownloadOptions(output_dir=tmp_path),
+        )
+        download_opts = mock_ydl_cls.call_args[0][0]
+        assert download_opts["ignoreerrors"] is True
