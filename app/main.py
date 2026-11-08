@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api import api_router
 from app.db import db
 from app.worker import BackgroundWorker
 
@@ -28,8 +29,4 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
 
 app = FastAPI(title="yt-to-jellyfin", version="0.1.0", lifespan=lifespan)
-
-
-@app.get("/api/health")
-async def health_check() -> dict[str, str]:
-    return {"status": "ok"}
+app.include_router(api_router)
