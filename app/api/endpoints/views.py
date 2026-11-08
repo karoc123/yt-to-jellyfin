@@ -2,6 +2,7 @@
 
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -34,6 +35,32 @@ def library_options() -> list[dict[str, str]]:
 
 
 templates.env.globals["library_options"] = library_options
+
+
+def filesize(num_bytes: int | None) -> str:
+    """Human readable size with binary steps, e.g. "350 MB" or "1.2 GB"."""
+    size = float(num_bytes or 0)
+    units = ("B", "KB", "MB", "GB", "TB")
+    step = 0
+    while size >= 1024 and step < len(units) - 1:
+        size /= 1024
+        step += 1
+    unit = units[step]
+    if unit == "B" or size >= 10:
+        return f"{size:.0f} {unit}"
+    return f"{size:.1f} {unit}"
+
+
+templates.env.filters["filesize"] = filesize
+
+BROWSER_PAGE_SIZE = 24
+
+
+def _like_pattern(term: str) -> str:
+    """`%term%` for `LIKE ... ESCAPE '\\'` with the term's own wildcards escaped."""
+    escaped = term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return f"%{escaped}%"
+
 
 # Flash messages selected by `?msg=<key>[&n=<count>]` after a redirect. Only these fixed
 # texts are rendered (never text from the URL), `{n}` is an integer.
@@ -133,52 +160,71 @@ async def view_browser(
     request: Request,
     channel_id: str | None = None,
     lib: str | None = None,
+    q: str = "",
+    page: int = 1,
     db_conn=Depends(get_db),
 ) -> HTMLResponse:
-    """Two-tier library browser: channel grid or channel's video grid."""
+    """Two-tier library browser: channel grid or a channel's (searchable, paged) videos."""
     cursor = db_conn.cursor()
 
     active_channel = None
     videos: list[dict] = []
     channels: list[dict] = []
+    pagination: dict[str, Any] = {}
+    q = q.strip()
 
     if channel_id:
         cursor.execute("SELECT * FROM channels WHERE id = ?", (channel_id,))
         active_channel = cursor.fetchone()
 
+        where = "WHERE channel_id = ? AND status = 'completed'"
+        params: list[Any] = [channel_id]
+        if q:
+            where += " AND title LIKE ? ESCAPE '\\'"
+            params.append(_like_pattern(q))
+        total = cursor.execute(f"SELECT COUNT(*) FROM videos {where}", params).fetchone()[0]
+        pages = max(1, -(-total // BROWSER_PAGE_SIZE))
+        page = min(max(page, 1), pages)
         cursor.execute(
-            """
-            SELECT * FROM videos
-            WHERE channel_id = ? AND status = 'completed'
+            f"""
+            SELECT * FROM videos {where}
             ORDER BY published_at DESC, created_at DESC
+            LIMIT ? OFFSET ?
             """,
-            (channel_id,),
+            [*params, BROWSER_PAGE_SIZE, (page - 1) * BROWSER_PAGE_SIZE],
         )
         videos = [dict(r) for r in cursor.fetchall()]
+
+        def page_url(number: int) -> str:
+            query: dict[str, Any] = {"channel_id": channel_id}
+            if lib and lib != "all":
+                query["lib"] = lib
+            if q:
+                query["q"] = q
+            if number > 1:
+                query["page"] = number
+            return f"/browser?{urlencode(query)}"
+
+        pagination = {
+            "page": page,
+            "pages": pages,
+            "total": total,
+            "prev_url": page_url(page - 1) if page > 1 else None,
+            "next_url": page_url(page + 1) if page < pages else None,
+        }
     else:
-        # Channel Grid with video count
+        # Channel grid with count and total size of completed videos
+        query = """
+            SELECT c.*, COUNT(v.id) AS video_count, COALESCE(SUM(v.file_size), 0) AS total_size
+            FROM channels c
+            LEFT JOIN videos v ON v.channel_id = c.id AND v.status = 'completed'
+        """
+        params = []
         if lib and lib != "all":
-            cursor.execute(
-                """
-                SELECT c.*, COUNT(v.id) AS video_count
-                FROM channels c
-                LEFT JOIN videos v ON v.channel_id = c.id AND v.status = 'completed'
-                WHERE c.library = ?
-                GROUP BY c.id
-                ORDER BY c.name ASC
-                """,
-                (lib,),
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT c.*, COUNT(v.id) AS video_count
-                FROM channels c
-                LEFT JOIN videos v ON v.channel_id = c.id AND v.status = 'completed'
-                GROUP BY c.id
-                ORDER BY c.name ASC
-                """
-            )
+            query += " WHERE c.library = ?"
+            params.append(lib)
+        query += " GROUP BY c.id ORDER BY c.name ASC"
+        cursor.execute(query, params)
         channels = [dict(r) for r in cursor.fetchall()]
         for ch in channels:
             ch["has_poster"] = channel_poster_path(ch) is not None
@@ -192,6 +238,8 @@ async def view_browser(
             "active_channel": dict(active_channel) if active_channel else None,
             "videos": videos,
             "channels": channels,
+            "q": q,
+            "pagination": pagination,
         },
     )
 

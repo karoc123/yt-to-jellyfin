@@ -621,3 +621,22 @@ main {
 .card-actions .action-main {
   flex: 1;
 }
+
+.search-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.btn:is(a) {
+  text-decoration: none;
+}

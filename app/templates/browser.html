@@ -39,7 +39,7 @@
     <div class="card-body">
       <span class="card-title">{{ ch.name }}</span>
       <div class="card-meta">
-        <span>{{ ch.video_count }} Video(s)</span>
+        <span>{{ ch.video_count }} Video(s) &middot; {{ ch.total_size|filesize }}</span>
         <span class="badge badge-lib">{{ ch.library or 'default' }}</span>
       </div>
     </div>
@@ -53,6 +53,13 @@
 
 {% else %}
 <!-- Two-Tier Navigation: Video Grid for Selected Channel -->
+<form action="/browser" method="GET" class="search-form" role="search">
+  <input type="hidden" name="channel_id" value="{{ active_channel.id }}">
+  {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
+  <input type="search" name="q" value="{{ q }}" placeholder="Titel durchsuchen..." aria-label="Titel durchsuchen" class="url-input input-sm">
+  <button type="submit" class="btn btn-secondary btn-sm">Suchen</button>
+</form>
+
 <div class="grid">
   {% for v in videos %}
   <div class="card">
@@ -110,10 +117,18 @@
   </div>
   {% else %}
   <div class="empty-state">
-    Keine Videos für diesen Kanal vorhanden.
+    {% if q %}Keine Videos zu „{{ q }}“ gefunden.{% else %}Keine Videos für diesen Kanal vorhanden.{% endif %}
   </div>
   {% endfor %}
 </div>
+
+{% if pagination.pages > 1 %}
+<nav class="pagination" aria-label="Seiten">
+  {% if pagination.prev_url %}<a href="{{ pagination.prev_url }}" class="btn btn-secondary btn-sm" rel="prev">&larr; Zurück</a>{% endif %}
+  <span class="text-muted-sm">Seite {{ pagination.page }} von {{ pagination.pages }} ({{ pagination.total }} Videos)</span>
+  {% if pagination.next_url %}<a href="{{ pagination.next_url }}" class="btn btn-secondary btn-sm" rel="next">Weiter &rarr;</a>{% endif %}
+</nav>
+{% endif %}
 
 <!-- Floating Bulk Action Bar -->
 <div id="bulk-bar" class="bulk-bar" hidden>

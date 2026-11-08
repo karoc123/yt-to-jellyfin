@@ -456,7 +456,6 @@ def test_f7_no_inline_styles_in_templates() -> None:
 # --- F8: browser search, pagination, size ---------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="F8: no title search in browser")
 def test_f8_browser_search_filters_titles(client: TestClient, temp_db: Database) -> None:
     _add_channel(temp_db)
     _add_video(temp_db, "vidF8s00001", title="Alpha foo episode")
@@ -467,7 +466,6 @@ def test_f8_browser_search_filters_titles(client: TestClient, temp_db: Database)
     assert "Beta bar episode" not in response.text
 
 
-@pytest.mark.xfail(strict=True, reason="F8: no pagination in browser")
 def test_f8_browser_pagination_page_two(client: TestClient, temp_db: Database) -> None:
     _add_channel(temp_db)
     for i in range(1, 31):  # vidF8p01 oldest ... vidF8p30 newest
@@ -478,7 +476,6 @@ def test_f8_browser_pagination_page_two(client: TestClient, temp_db: Database) -
     assert shown == {f"vidF8p{i:02d}" for i in range(1, 7)}, sorted(shown)
 
 
-@pytest.mark.xfail(strict=True, reason="F8: no size per channel")
 def test_f8_channel_grid_shows_size(client: TestClient, temp_db: Database) -> None:
     _add_channel(temp_db)
     _add_video(temp_db, "vidF8z00001", file_size=100 * 1024 * 1024)
