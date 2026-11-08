@@ -9,7 +9,7 @@ from fastapi.templating import Jinja2Templates
 from app.api.endpoints.actions import channel_poster_path
 from app.core.config import settings
 from app.db import get_db
-from app.worker.queue import JobQueue
+from app.worker.models import Job
 
 templates_dir = Path(__file__).parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(templates_dir))
@@ -44,7 +44,6 @@ async def view_home(
     db_conn=Depends(get_db),
 ) -> HTMLResponse:
     """Quick Download and active queue view."""
-    queue = JobQueue()
     # Fetch recent jobs
     cursor = db_conn.cursor()
     cursor.execute(
@@ -54,8 +53,7 @@ async def view_home(
         """
     )
     raw_jobs = cursor.fetchall()
-    jobs = [queue.get_job(r["id"]) for r in raw_jobs]
-    jobs = [j for j in jobs if j is not None]
+    jobs = [Job.from_row(r) for r in raw_jobs]
 
     if lib and lib != "all":
         jobs = [j for j in jobs if j.payload.get("library", "default") == lib]

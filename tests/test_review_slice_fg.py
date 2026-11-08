@@ -506,7 +506,6 @@ def test_f8_channel_grid_shows_size(client: TestClient, temp_db: Database) -> No
 # --- G1/G2: home view queries -----------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="G1: N+1 get_job per job row")
 def test_g1_home_does_not_reload_each_job(
     client: TestClient, temp_db: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
