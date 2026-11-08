@@ -10,6 +10,17 @@ from app.retention.deletion import delete_video_artifacts
 logger = logging.getLogger(__name__)
 
 
+def parse_published(value: str | None) -> datetime | None:
+    """Parse ISO 8601 (`2026-01-01T12:00:00Z`), `2026-01-01` or `20260101` as UTC datetime."""
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
 @dataclass
 class RetentionConfig:
     """Global or per-channel retention rules."""
@@ -179,19 +190,11 @@ class RetentionEngine:
         # 1. TTL check (older than X days)
         if ttl_days is not None and ttl_days > 0:
             for v in videos:
-                pub_str = v["published_at"]
-                try:
-                    # Support ISO 8601 strings and YYYY-MM-DD
-                    if "T" in pub_str:
-                        pub_dt = datetime.fromisoformat(pub_str.replace("Z", "+00:00"))
-                    else:
-                        pub_dt = datetime.fromisoformat(pub_str).replace(tzinfo=UTC)
-
-                    age_days = (now - pub_dt).total_seconds() / 86400.0
-                    if age_days > ttl_days:
-                        to_delete_ids.add(v["id"])
-                except Exception as exc:
-                    logger.warning("Could not parse published_at for video %s: %s", v["id"], exc)
+                pub_dt = parse_published(v["published_at"])
+                if pub_dt is None:
+                    logger.warning("Could not parse published_at for video %s", v["id"])
+                elif (now - pub_dt).total_seconds() / 86400.0 > ttl_days:
+                    to_delete_ids.add(v["id"])
 
         # 2. Max count check (keep latest N videos)
         if max_count is not None and max_count > 0:

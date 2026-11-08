@@ -1,12 +1,15 @@
 """YouTube RSS feed parser and channel update synchronizer."""
 
 import logging
+import sqlite3
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 import defusedxml.ElementTree as DefusedET
 import httpx
 
 from app.db.database import Database, db
+from app.retention.engine import parse_published
 from app.worker.models import MAX_VIDEO_ATTEMPTS, utc_now_str
 from app.worker.queue import JobQueue
 
@@ -148,7 +151,8 @@ class SubscriptionPoller:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                SELECT id, name, feed_url, auto_download, library
+                SELECT id, name, feed_url, auto_download, library,
+                       retention_days, retention_count
                 FROM channels WHERE id = ?
                 """,
                 (channel_id,),
@@ -165,6 +169,8 @@ class SubscriptionPoller:
             feed_url = ch["feed_url"] or self.get_feed_url(channel_id)
             library = ch["library"] or "default"
             channel_name = ch["name"]
+            ttl_days = ch["retention_days"] or 0
+            max_count = ch["retention_count"] or 0
 
         content = self.fetch_feed_content(feed_url)
         if not content:
@@ -172,10 +178,12 @@ class SubscriptionPoller:
 
         entries = RssFeedParser.parse_feed(content)
         enqueued_ids: list[str] = []
-        now = utc_now_str()
+        now = datetime.now(UTC)
+        now_str = utc_now_str()
 
         with self.db.connection() as conn:
             cursor = conn.cursor()
+            candidates: list[RssEntry] = []
             for entry in entries:
                 if self.ignore_shorts and entry.is_short:
                     logger.debug("Skipping YouTube Short: %s (%s)", entry.title, entry.video_id)
@@ -195,29 +203,71 @@ class SubscriptionPoller:
                         AND next_attempt_at IS NOT NULL AND next_attempt_at <= ?
                     )
                     """,
-                    (entry.video_id, MAX_VIDEO_ATTEMPTS, now),
+                    (entry.video_id, MAX_VIDEO_ATTEMPTS, now_str),
                 )
                 if cursor.fetchone():
                     continue
 
-                # Enqueue download job with video_id deduplication
-                job = self.queue.enqueue(
-                    job_type="download_video",
-                    payload={
-                        "video_id": entry.video_id,
-                        "url": entry.link,
-                        "title": entry.title,
-                        "channel_id": channel_id,
-                        "channel_name": channel_name,
-                        "library": library,
-                        "published_at": entry.published,
-                    },
-                    deduplicate_key="video_id",
-                )
-                if job:
-                    enqueued_ids.append(entry.video_id)
+                # Retention TTL: do not download what retention would delete right away
+                published = parse_published(entry.published)
+                if (
+                    ttl_days > 0
+                    and published
+                    and (now - published).total_seconds() / 86400 > ttl_days
+                ):
+                    logger.debug("Skipping %s: older than %d days", entry.video_id, ttl_days)
+                    continue
+
+                candidates.append(entry)
+
+            if max_count > 0 and candidates:
+                candidates = self._newest_within_count(cursor, channel_id, candidates, max_count)
+
+        for entry in candidates:
+            # Enqueue download job with video_id deduplication
+            job = self.queue.enqueue(
+                job_type="download_video",
+                payload={
+                    "video_id": entry.video_id,
+                    "url": entry.link,
+                    "title": entry.title,
+                    "channel_id": channel_id,
+                    "channel_name": channel_name,
+                    "library": library,
+                    "published_at": entry.published,
+                },
+                deduplicate_key="video_id",
+            )
+            if job:
+                enqueued_ids.append(entry.video_id)
 
         return enqueued_ids
+
+    @staticmethod
+    def _newest_within_count(
+        cursor: sqlite3.Cursor, channel_id: str, candidates: list[RssEntry], max_count: int
+    ) -> list[RssEntry]:
+        """Keep only candidates that rank among the `max_count` newest videos.
+
+        Ranking pool: the channel's completed unpinned videos (what retention counts) plus
+        the candidates. Anything outside the top N would be deleted by retention right away.
+        Candidates without a parseable date are kept.
+        """
+        cursor.execute(
+            """
+            SELECT id, published_at FROM videos
+            WHERE channel_id = ? AND status = 'completed' AND is_pinned = 0
+            """,
+            (channel_id,),
+        )
+        pool = {row["id"]: parse_published(row["published_at"]) for row in cursor.fetchall()}
+        for entry in candidates:
+            pool[entry.video_id] = parse_published(entry.published)
+        dated = sorted(((d, vid) for vid, d in pool.items() if d), reverse=True)
+        newest = {vid for _, vid in dated[:max_count]}
+        return [
+            e for e in candidates if e.video_id in newest or parse_published(e.published) is None
+        ]
 
     def poll_all_channels(self) -> dict[str, list[str]]:
         """Poll all active channels marked for auto_download."""

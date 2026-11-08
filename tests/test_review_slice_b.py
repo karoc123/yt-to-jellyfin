@@ -192,7 +192,6 @@ def test_b2_transient_failure_is_retried_after_backoff(
 # --- B3: poller must not enqueue videos that fall under retention immediately ------------
 
 
-@pytest.mark.xfail(strict=True, reason="B3: poller enqueues entries older than retention_days")
 def test_b3_poller_respects_retention_days(queue: JobQueue, temp_db: Database) -> None:
     now = datetime.now(UTC)
     with temp_db.connection() as conn:
@@ -202,7 +201,6 @@ def test_b3_poller_respects_retention_days(queue: JobQueue, temp_db: Database) -
     assert _poller(queue, temp_db, xml).poll_channel(CHANNEL_ID) == ["vidB3new01"]
 
 
-@pytest.mark.xfail(strict=True, reason="B3: poller enqueues entries beyond retention_count")
 def test_b3_poller_respects_retention_count(queue: JobQueue, temp_db: Database) -> None:
     now = datetime.now(UTC)
     with temp_db.connection() as conn:
