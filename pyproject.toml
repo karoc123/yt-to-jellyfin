@@ -19,6 +19,9 @@ dependencies = [
   "defusedxml>=0.7.1",
 ]
 
+[project.scripts]
+migrate-tubearchivist = "app.migration.tubearchivist:main"
+
 [dependency-groups]
 dev = [
   "pytest>=8",
