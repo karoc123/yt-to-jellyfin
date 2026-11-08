@@ -94,7 +94,6 @@ def test_c1_database_default_matches_settings() -> None:
 # --- C2: cookies reach yt-dlp ---------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="C2: worker never passes cookies_path")
 def test_c2_worker_passes_cookies(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, temp_db: Database
 ) -> None:

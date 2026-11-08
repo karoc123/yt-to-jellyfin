@@ -232,6 +232,9 @@ class BackgroundWorker:
             opts_kwargs["format_sort"] = format_sort
         if throttled_rate:
             opts_kwargs["throttled_rate_bytes"] = int(throttled_rate)
+        # Cookies only when the file exists (no warning spam when none are configured)
+        if settings.cookies_path and Path(settings.cookies_path).is_file():
+            opts_kwargs["cookies_path"] = settings.cookies_path
 
         dl_options = DownloadOptions(**opts_kwargs)
 
