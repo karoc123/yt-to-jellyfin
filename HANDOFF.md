@@ -19,11 +19,17 @@ The repository bootstrap is complete and verified:
    * `docker-compose.yml` preconfigured for standard deployment mapping `./data:/data` and `./media:/media`.
    * `.dockerignore` ignoring virtualenvs, cache, and git metadata.
    * GitHub Actions workflow updated to verify Docker image builds and container health in CI.
-6. **Local Verification:**
-   * Run `./run-check.sh` locally to execute `uv sync --locked`, `ruff check`, `ruff format --check`, and `pytest`. All tests are passing green.
+6. **yt-dlp Wrapper Service & Pipeline (Issue #4):**
+   * Configurable download engine in `app/downloader/` (`YtDlpService`, `DownloadOptions`, `POTokenConfig`) supporting format selection, rate-limiting, and sleep intervals.
+   * Subtitle retrieval (`.vtt`) and Jellyfin-standard thumbnail convention (`-thumb.jpg`).
+   * Netscape `cookies.txt` import and validation helpers.
+   * Support for static, dynamic, and HTTP-based PO-token providers (`HttpPOTokenProvider`).
+   * Sync and async execution methods (`async_extract_info`, `async_download`) with structured exception mapping and progress hook wrappers.
+7. **Local Verification:**
+   * Run `./run-check.sh` locally to execute `uv sync --locked`, `ruff check`, `ruff format --check`, and `pytest`. All 19 tests are passing green.
 
 ---
 
 ## Next Tasks (Milestone 1)
 
-1. **Issue #4:** yt-dlp wrapper service & video download pipeline (`yt-dlp` integration, error handling, metadata extraction, format selection).
+1. **Issue #5:** Jellyfin library layout & NFO generator (standard TV show structure `<Channel>/Season <Year>/<Date> - <Title> [<ID>].mp4`, XML generator for `tvshow.nfo` and episode `.nfo`).
