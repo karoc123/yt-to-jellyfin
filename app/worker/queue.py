@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 class JobQueue:
     """Manages transactional job queue operations on top of SQLite."""
 
-    def __init__(self, database: Database = db) -> None:
-        self.db = database
+    def __init__(self, database: Database | None = None) -> None:
+        self.db = database if database is not None else db
 
     def enqueue(
         self,

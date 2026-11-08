@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Abonnements & Queue - yt-to-jellyfin{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.3rem;">Abonnements verwalten</h2>
+    <p style="font-size: 13px; color: var(--text-muted);">
+      Automatische Downloads, Kanal-spezifische Aufbewahrung (TTL / Episoden-Limit) und Filter
+    </p>
+  </div>
+</div>
+
+<!-- Add Subscription Card -->
+<div class="download-card" style="margin-bottom: 24px;">
+  <h3 style="font-size: 1.1rem; margin-bottom: 12px;">Neuen Kanal abonnieren</h3>
+  <form action="/api/subscriptions" method="POST" class="download-form">
+    <div class="download-form-row">
+      <input
+        type="text"
+        name="channel_input"
+        placeholder="Kanal-URL, Handle (@Name) oder Channel-ID (UC...)..."
+        required
+        class="url-input"
+        autocomplete="off"
+      >
+      <input
+        type="text"
+        name="name"
+        placeholder="Kanalname (z. B. Kurzgesagt)"
+        required
+        class="url-input"
+      >
+      <button type="submit" class="btn">
+        <span>➕</span> Abonnieren
+      </button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 8px;">
+      <div>
+        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 2px;">Ziel-Bibliothek:</label>
+        <select name="library" class="url-input" style="padding: 6px;">
+          <option value="default" {% if current_lib == 'default' %}selected{% endif %}>Standard</option>
+          <option value="kids" {% if current_lib == 'kids' %}selected{% endif %}>Kids</option>
+          <option value="dokus" {% if current_lib == 'dokus' %}selected{% endif %}>Dokus</option>
+          <option value="tech" {% if current_lib == 'tech' %}selected{% endif %}>Tech</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 2px;">Max. Episoden (0 = unbegrenzt):</label>
+        <input type="number" name="retention_count" placeholder="z. B. 10" min="0" class="url-input" style="padding: 6px;">
+      </div>
+
+      <div>
+        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 2px;">TTL Tage (0 = unbegrenzt):</label>
+        <input type="number" name="retention_days" placeholder="z. B. 30" min="0" class="url-input" style="padding: 6px;">
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Subscribed Channels List -->
+<section>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h3 style="font-size: 1.1rem;">Aktive Abonnements ({{ channels|length }})</h3>
+    <form action="/api/subscriptions/sync-all" method="POST">
+      <button type="submit" class="btn btn-secondary" style="padding: 6px 12px; font-size: 13px;">
+        🔄 Jetzt alle synchronisieren
+      </button>
+    </form>
+  </div>
+
+  <div class="grid">
+    {% for ch in channels %}
+    <div class="card" style="padding: 16px; gap: 10px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <div>
+          <h4 style="font-size: 1rem;">{{ ch.name }}</h4>
+          <span style="font-size: 12px; color: var(--text-muted);">ID: {{ ch.id }}</span>
+        </div>
+        <span class="badge badge-lib">{{ ch.library or 'default' }}</span>
+      </div>
+
+      <div style="font-size: 13px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;">
+        <span>Episoden-Limit: {% if ch.retention_count %}{{ ch.retention_count }} Videos{% else %}Unbegrenzt{% endif %}</span>
+        <span>Aufbewahrungszeit: {% if ch.retention_days %}{{ ch.retention_days }} Tage{% else %}Unbegrenzt{% endif %}</span>
+      </div>
+
+      <div class="card-actions" style="margin-top: 8px;">
+        <form action="/api/subscriptions/sync" method="POST" style="flex: 1;">
+          <input type="hidden" name="channel_id" value="{{ ch.id }}">
+          <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 6px; font-size: 13px;">
+            🔄 Sync
+          </button>
+        </form>
+
+        <form action="/api/subscriptions/delete" method="POST" onsubmit="return confirm('Abo beenden?');">
+          <input type="hidden" name="channel_id" value="{{ ch.id }}">
+          <button type="submit" class="btn btn-danger" style="padding: 6px 12px; font-size: 13px;">
+            🗑️
+          </button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted); border: 1px dashed var(--card-border); border-radius: var(--radius);">
+      Keine Abonnements vorhanden.
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

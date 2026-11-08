@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+
+{% block title %}Quick Download - yt-to-jellyfin{% endblock %}
+
+{% block content %}
+<div class="download-card">
+  <h2 style="margin-bottom: 12px; font-size: 1.25rem;">Schnell-Download</h2>
+  <form action="/api/downloads" method="POST" class="download-form">
+    <div class="download-form-row">
+      <input
+        type="url"
+        name="url"
+        placeholder="YouTube-Video-, Shorts- oder Playlist-Link einfügen..."
+        required
+        class="url-input"
+        autocomplete="off"
+      >
+      <input type="hidden" name="library" value="{{ current_lib or 'default' }}">
+      <button type="submit" class="btn">
+        <span>⬇️</span> Herunterladen
+      </button>
+    </div>
+
+    <div>
+      <button type="button" class="options-toggle" onclick="toggleAdvancedOptions()">
+        ⚙️ Zusätzliche Optionen (Auflösung, SponsorBlock, Ziel-Bibliothek)
+      </button>
+    </div>
+
+    <div class="advanced-options" id="advanced-options">
+      <div>
+        <label style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 4px;">Ziel-Bibliothek:</label>
+        <select name="target_library" class="url-input" style="padding: 8px;">
+          <option value="default" {% if current_lib == 'default' %}selected{% endif %}>Standard</option>
+          <option value="kids" {% if current_lib == 'kids' %}selected{% endif %}>Kids</option>
+          <option value="dokus" {% if current_lib == 'dokus' %}selected{% endif %}>Dokus</option>
+          <option value="tech" {% if current_lib == 'tech' %}selected{% endif %}>Tech</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 4px;">Max. Auflösung:</label>
+        <select name="max_height" class="url-input" style="padding: 8px;">
+          <option value="">Beste Qualität (Original)</option>
+          <option value="1080">1080p (Full HD)</option>
+          <option value="720">720p (HD)</option>
+          <option value="480">480p (SD)</option>
+        </select>
+      </div>
+
+      <div>
+        <label style="font-size: 13px; color: var(--text-muted); display: block; margin-bottom: 4px;">SponsorBlock:</label>
+        <label style="font-size: 13px; display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <input type="checkbox" name="sponsorblock" value="1" checked> Sponsoren automatisch herausschneiden
+        </label>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Active Jobs Queue Section -->
+<section>
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h3 style="font-size: 1.1rem;">Aktuelle Warteschlange</h3>
+    <span style="font-size: 13px; color: var(--text-muted);">{{ jobs|length }} Auftrag / Aufträge</span>
+  </div>
+
+  {% if jobs %}
+  <div class="grid">
+    {% for job in jobs %}
+    <div class="card" style="padding: 12px; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <span class="card-title">{{ job.payload.title or job.payload.url or job.id }}</span>
+        <span class="badge {% if job.status == 'completed' %}badge-pinned{% elif job.status == 'failed' %}btn-danger{% else %}badge-lib{% endif %}">
+          {{ job.status }}
+        </span>
+      </div>
+
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" style="width: {{ job.progress }}%;"></div>
+      </div>
+
+      <div class="card-meta">
+        <span>{{ job.progress }}%</span>
+        <span>Bibliothek: {{ job.payload.library or 'default' }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="padding: 32px; text-align: center; color: var(--text-muted); border: 1px dashed var(--card-border); border-radius: var(--radius);">
+    Keine aktiven Downloads in der Warteschlange.
+  </div>
+  {% endif %}
+</section>
+{% endblock %}

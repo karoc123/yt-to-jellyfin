@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Mediathek - yt-to-jellyfin{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+  <div>
+    <h2 style="font-size: 1.3rem;">Mediathek Übersicht</h2>
+    <p style="font-size: 13px; color: var(--text-muted);">
+      {% if active_channel %}
+        <a href="/browser{% if current_lib and current_lib != 'all' %}?lib={{ current_lib }}{% endif %}" style="color: var(--accent); text-decoration: none;">&larr; Zurück zu allen Kanälen</a> &bull; Kanal: <strong>{{ active_channel.name }}</strong>
+      {% else %}
+        Kanäle und Videos sortiert nach Mediathek
+      {% endif %}
+    </p>
+  </div>
+
+  {% if active_channel and videos %}
+  <div style="display: flex; gap: 8px;">
+    <button type="button" class="btn btn-secondary" onclick="selectAllVideos(false)">Alle auswählen</button>
+    <button type="button" class="btn btn-secondary" onclick="selectAllVideos(true)">Nur Ungepinnte</button>
+    <button type="button" class="btn btn-secondary" onclick="deselectAllVideos()">Auswahl aufheben</button>
+  </div>
+  {% endif %}
+</div>
+
+{% if not active_channel %}
+<!-- Two-Tier Navigation: Channel Grid -->
+<div class="grid">
+  {% for ch in channels %}
+  <a href="/browser?channel_id={{ ch.id }}{% if current_lib and current_lib != 'all' %}&lib={{ current_lib }}{% endif %}" class="card" style="text-decoration: none;">
+    <div style="height: 120px; background: linear-gradient(135deg, #1f6feb 0%, #161b22 100%); display: flex; align-items: center; justify-content: center; font-size: 2.5rem;">
+      📺
+    </div>
+    <div class="card-body">
+      <span class="card-title">{{ ch.name }}</span>
+      <div class="card-meta">
+        <span>{{ ch.video_count }} Video(s)</span>
+        <span class="badge badge-lib">{{ ch.library or 'default' }}</span>
+      </div>
+    </div>
+  </a>
+  {% else %}
+  <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted); border: 1px dashed var(--card-border); border-radius: var(--radius);">
+    Keine Kanäle in dieser Bibliothek gefunden.
+  </div>
+  {% endfor %}
+</div>
+
+{% else %}
+<!-- Two-Tier Navigation: Video Grid for Selected Channel -->
+<div class="grid">
+  {% for v in videos %}
+  <div class="card">
+    <div style="position: relative;">
+      {% if v.thumbnail_path %}
+      <img src="/api/media/thumb?video_id={{ v.id }}" alt="{{ v.title }}" class="card-thumb" loading="lazy">
+      {% else %}
+      <div class="card-thumb" style="display: flex; align-items: center; justify-content: center; color: var(--text-muted);">
+        Kein Vorschaubild
+      </div>
+      {% endif %}
+
+      <label style="position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.7); padding: 4px 6px; border-radius: 4px; cursor: pointer;">
+        <input
+          type="checkbox"
+          class="video-checkbox"
+          data-video-id="{{ v.id }}"
+          data-pinned="{{ v.is_pinned }}"
+          onchange="toggleSelectVideo(this)"
+        >
+      </label>
+
+      {% if v.is_pinned %}
+      <span class="badge badge-pinned" style="position: absolute; top: 8px; right: 8px;">📌 Gepinnt</span>
+      {% endif %}
+    </div>
+
+    <div class="card-body">
+      <span class="card-title">{{ v.title }}</span>
+      <div class="card-meta">
+        <span>{{ v.published_at[:10] }}</span>
+        <span>{{ (v.duration / 60)|round|int }} Min.</span>
+      </div>
+
+      <div class="card-actions">
+        <form action="/api/videos/pin" method="POST" style="flex: 1;">
+          <input type="hidden" name="video_id" value="{{ v.id }}">
+          <input type="hidden" name="is_pinned" value="{% if v.is_pinned %}0{% else %}1{% endif %}">
+          <button type="submit" class="btn btn-secondary" style="width: 100%; padding: 6px;">
+            {% if v.is_pinned %}Entpinnen{% else %}📌 Pinnen{% endif %}
+          </button>
+        </form>
+
+        <form action="/api/videos/delete" method="POST" onsubmit="return confirm('Video wirklich löschen?');">
+          <input type="hidden" name="video_id" value="{{ v.id }}">
+          <button type="submit" class="btn btn-danger" style="padding: 6px 12px;">
+            🗑️
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div style="grid-column: 1 / -1; padding: 40px; text-align: center; color: var(--text-muted); border: 1px dashed var(--card-border); border-radius: var(--radius);">
+    Keine Videos für diesen Kanal vorhanden.
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Floating Bulk Action Bar -->
+<div id="bulk-bar" class="bulk-bar" style="display: none;">
+  <span id="bulk-count" style="font-weight: 600;">0 Videos ausgewählt</span>
+  <div style="display: flex; gap: 8px;">
+    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(true)">📌 Pinnen</button>
+    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(false)">Entpinnen</button>
+    <button type="button" class="btn btn-danger" onclick="bulkDeleteVideos()">🗑️ Löschen</button>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
