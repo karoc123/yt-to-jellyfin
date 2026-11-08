@@ -111,7 +111,8 @@ class YtDlpService:
         progress_hook: Callable[[dict[str, Any]], None] | None = None,
     ) -> dict[str, Any]:
         """Translate high-level DownloadOptions into yt-dlp parameters."""
-        output_dir = Path(options.output_dir)
+        # The directory is literal text (e.g. channel "100% Wolf"): escape % for outtmpl
+        output_dir = Path(str(options.output_dir).replace("%", "%%"))
         base_template = options.output_template
 
         # Compute template names for video, thumbnail (-thumb.jpg), and subtitle

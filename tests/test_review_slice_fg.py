@@ -578,7 +578,6 @@ class _RealFilenameYDL(FakeYoutubeDL):
         return real.prepare_filename(info)
 
 
-@pytest.mark.xfail(strict=True, reason="G4: % in title interpolated by yt-dlp outtmpl")
 def test_g4_percent_in_title_kept_literally(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, temp_db: Database
 ) -> None:

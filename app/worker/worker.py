@@ -325,7 +325,8 @@ class BackgroundWorker:
         # Step 3: Target path into the download options
         dl_options = DownloadOptions(
             output_dir=season_dir,
-            output_template=f"{Path(video_filename).stem}.%(ext)s",
+            # Literal stem: escape % so yt-dlp does not interpolate titles like "100%"
+            output_template=f"{Path(video_filename).stem.replace('%', '%%')}.%(ext)s",
             **opts_kwargs,
         )
 
