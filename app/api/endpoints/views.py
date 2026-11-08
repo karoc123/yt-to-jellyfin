@@ -1,6 +1,7 @@
 """HTML Web Views for Quick Download, Mediathek Browser, and Subscriptions."""
 
 from pathlib import Path
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
@@ -37,6 +38,35 @@ templates.env.globals["library_options"] = library_options
 router = APIRouter(tags=["views"])
 
 
+# Internal maintenance jobs are not shown in the download queue
+_INTERNAL_JOB_TYPES = ("poll_channels", "retention")
+
+JOB_STATUS_LABELS = {
+    "pending": "Wartend",
+    "running": "Läuft",
+    "completed": "Fertig",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen",
+}
+templates.env.globals["job_status_labels"] = JOB_STATUS_LABELS
+
+
+def _queue_context(db_conn: Any, lib: str | None) -> dict[str, Any]:
+    """Recent user-facing jobs (optionally filtered by library) for the queue partial."""
+    query = f"SELECT * FROM jobs WHERE type NOT IN ({', '.join('?' * len(_INTERNAL_JOB_TYPES))})"
+    params: list[Any] = list(_INTERNAL_JOB_TYPES)
+    if lib and lib != "all":
+        query += " AND COALESCE(json_extract(payload, '$.library'), 'default') = ?"
+        params.append(lib)
+    query += " ORDER BY created_at DESC LIMIT 20"
+    jobs = [Job.from_row(r) for r in db_conn.execute(query, params).fetchall()]
+    return {
+        "current_lib": lib or "all",
+        "jobs": jobs,
+        "queue_active": any(job.status in ("pending", "running") for job in jobs),
+    }
+
+
 @router.get("/", response_class=HTMLResponse)
 async def view_home(
     request: Request,
@@ -44,28 +74,22 @@ async def view_home(
     db_conn=Depends(get_db),
 ) -> HTMLResponse:
     """Quick Download and active queue view."""
-    # Fetch recent jobs
-    if lib and lib != "all":
-        rows = db_conn.execute(
-            """
-            SELECT * FROM jobs
-            WHERE COALESCE(json_extract(payload, '$.library'), 'default') = ?
-            ORDER BY created_at DESC LIMIT 20
-            """,
-            (lib,),
-        ).fetchall()
-    else:
-        rows = db_conn.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT 20").fetchall()
-    jobs = [Job.from_row(r) for r in rows]
-
     return templates.TemplateResponse(
         request=request,
         name="index.html",
-        context={
-            "active_page": "home",
-            "current_lib": lib or "all",
-            "jobs": jobs,
-        },
+        context={"active_page": "home", **_queue_context(db_conn, lib)},
+    )
+
+
+@router.get("/partials/queue", response_class=HTMLResponse)
+async def view_queue_partial(
+    request: Request,
+    lib: str | None = None,
+    db_conn=Depends(get_db),
+) -> HTMLResponse:
+    """Queue fragment for HTMX polling and swaps after retry/cancel."""
+    return templates.TemplateResponse(
+        request=request, name="components/queue.html", context=_queue_context(db_conn, lib)
     )
 
 

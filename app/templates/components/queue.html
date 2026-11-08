@@ -1,0 +1,50 @@
+{# Download queue fragment: included by index.html and served by /partials/queue for HTMX #}
+{% set queue_qs = '?lib=' ~ (current_lib|urlencode) if current_lib and current_lib != 'all' else '' %}
+<section id="queue"{% if queue_active %} hx-get="/partials/queue{{ queue_qs }}" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <div class="section-header">
+    <h3 class="section-title">Aktuelle Warteschlange</h3>
+    <span class="text-muted-sm">{{ jobs|length }} Auftrag / Aufträge</span>
+  </div>
+
+  {% if jobs %}
+  <div class="grid">
+    {% for job in jobs %}
+    <div class="card job-card">
+      <div class="job-card-head">
+        <span class="card-title">{{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}</span>
+        <span class="badge badge-status-{{ job.status }}">{{ job_status_labels.get(job.status, job.status) }}</span>
+      </div>
+
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" style="width: {{ job.progress }}%;"></div>
+      </div>
+
+      <div class="card-meta">
+        <span>{{ job.progress }}%</span>
+        <span>Bibliothek: {{ job.payload.library or 'default' }}</span>
+      </div>
+
+      {% if job.status == 'failed' and job.error_message %}
+      <p class="job-error">{{ job.error_message }}</p>
+      {% endif %}
+
+      {% if job.status in ('failed', 'cancelled', 'pending') %}
+      {% set job_action = 'cancel' if job.status == 'pending' else 'retry' %}
+      <form action="/api/jobs/{{ job.id }}/{{ job_action }}" method="POST"
+            hx-post="/api/jobs/{{ job.id }}/{{ job_action }}" hx-target="#queue" hx-swap="outerHTML"
+            class="job-actions">
+        {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
+        {% if job_action == 'retry' %}
+        <button type="submit" class="btn btn-secondary btn-sm">Erneut versuchen</button>
+        {% else %}
+        <button type="submit" class="btn btn-danger btn-sm">Abbrechen</button>
+        {% endif %}
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">Keine aktiven Downloads in der Warteschlange.</div>
+  {% endif %}
+</section>

@@ -151,6 +151,48 @@ class JobQueue:
                 (str(error_message), now, job_id),
             )
 
+    def retry(self, job_id: str) -> bool:
+        """Put a failed/cancelled job back to pending; returns False if not retryable.
+
+        For video downloads the video's retry backoff is cleared as well, so the poller
+        does not schedule a second attempt on its own.
+        """
+        with self.db.connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE jobs
+                SET status = 'pending', progress = 0, error_message = NULL,
+                    started_at = NULL, completed_at = NULL
+                WHERE id = ? AND status IN ('failed', 'cancelled')
+                """,
+                (job_id,),
+            )
+            if not cursor.rowcount:
+                return False
+            conn.execute(
+                """
+                UPDATE videos SET next_attempt_at = NULL
+                WHERE id = (
+                    SELECT json_extract(payload, '$.video_id') FROM jobs
+                    WHERE id = ? AND type = 'download_video'
+                )
+                """,
+                (job_id,),
+            )
+            return True
+
+    def cancel(self, job_id: str) -> bool:
+        """Cancel a pending job; running jobs cannot be interrupted (returns False)."""
+        with self.db.connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE jobs SET status = 'cancelled', completed_at = ?
+                WHERE id = ? AND status = 'pending'
+                """,
+                (utc_now_str(), job_id),
+            )
+            return cursor.rowcount > 0
+
     def recover_crashed_jobs(self) -> int:
         """Reset stuck 'running' jobs to 'pending' upon worker reboot."""
         with self.db.connection() as conn:

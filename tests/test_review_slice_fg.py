@@ -272,7 +272,6 @@ def test_f2_app_js_does_not_use_local_storage() -> None:
 # --- F3: queue with errors, retry/cancel, polling partial, internal jobs hidden -------
 
 
-@pytest.mark.xfail(strict=True, reason="F3: failed job error_message not shown")
 def test_f3_failed_job_shows_error_message(client: TestClient, temp_db: Database) -> None:
     _add_job(
         temp_db,
@@ -286,7 +285,6 @@ def test_f3_failed_job_shows_error_message(client: TestClient, temp_db: Database
     assert "Synthetic failure F3-XYZ" in response.text
 
 
-@pytest.mark.xfail(strict=True, reason="F3: no retry endpoint")
 def test_f3_retry_sets_failed_job_pending(client: TestClient, temp_db: Database) -> None:
     _add_job(temp_db, "job_f3retry", status="failed", error_message="boom")
     response = client.post("/api/jobs/job_f3retry/retry", follow_redirects=False)
@@ -294,7 +292,6 @@ def test_f3_retry_sets_failed_job_pending(client: TestClient, temp_db: Database)
     assert _job_status(temp_db, "job_f3retry") == "pending"
 
 
-@pytest.mark.xfail(strict=True, reason="F3: no cancel endpoint")
 def test_f3_cancel_pending_job(client: TestClient, temp_db: Database) -> None:
     _add_job(temp_db, "job_f3cancel", status="pending")
     response = client.post("/api/jobs/job_f3cancel/cancel", follow_redirects=False)
@@ -302,7 +299,6 @@ def test_f3_cancel_pending_job(client: TestClient, temp_db: Database) -> None:
     assert _job_status(temp_db, "job_f3cancel") == "cancelled"
 
 
-@pytest.mark.xfail(strict=True, reason="F3: no queue partial for HTMX polling")
 def test_f3_queue_partial_is_fragment(client: TestClient, temp_db: Database) -> None:
     _add_job(
         temp_db, "job_f3partial", payload='{"url": "https://www.youtube.com/watch?v=synthF3p"}'
@@ -313,7 +309,6 @@ def test_f3_queue_partial_is_fragment(client: TestClient, temp_db: Database) -> 
     assert not _parse(response.text).has_html_tag
 
 
-@pytest.mark.xfail(strict=True, reason="F3: internal jobs listed as downloads")
 def test_f3_internal_jobs_not_listed(client: TestClient, temp_db: Database) -> None:
     _add_job(temp_db, "job_f3pollchan", job_type="poll_channels")
     _add_job(temp_db, "job_f3retention", job_type="retention")

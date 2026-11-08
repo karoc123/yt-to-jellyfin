@@ -343,3 +343,83 @@ main {
   background-color: var(--accent);
   transition: width 0.3s ease;
 }
+
+/* Section headers, helpers */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 1.1rem;
+}
+
+.text-muted-sm {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.empty-state {
+  grid-column: 1 / -1;
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted);
+  border: 1px dashed var(--card-border);
+  border-radius: var(--radius);
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+/* Download queue */
+.job-card {
+  padding: 12px;
+  gap: 8px;
+}
+
+.job-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.job-error {
+  color: var(--danger-hover);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.job-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.badge-status-pending,
+.badge-status-running {
+  background-color: rgba(31, 111, 235, 0.2);
+  color: #58a6ff;
+  border: 1px solid var(--accent);
+}
+
+.badge-status-completed {
+  background-color: rgba(35, 134, 54, 0.2);
+  color: #3fb950;
+  border: 1px solid var(--primary);
+}
+
+.badge-status-failed {
+  background-color: rgba(218, 54, 51, 0.2);
+  color: var(--danger-hover);
+  border: 1px solid var(--danger);
+}
+
+.badge-status-cancelled {
+  background-color: var(--card-border);
+  color: var(--text-muted);
+  border: 1px solid var(--text-muted);
+}

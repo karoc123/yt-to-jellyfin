@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
@@ -58,6 +58,39 @@ async def create_download_job(
 
     queue.enqueue("download_video", payload)
     return RedirectResponse(f"/?lib={chosen_lib}", status_code=303)
+
+
+def _home_redirect(lib: str | None, hx_request: str | None) -> RedirectResponse:
+    """Back to the queue: HTMX gets the queue fragment, plain forms the home page."""
+    path = "/partials/queue" if hx_request else "/"
+    query = f"?{urlencode({'lib': lib})}" if lib and lib != "all" else ""
+    return RedirectResponse(f"{path}{query}", status_code=303)
+
+
+@router.post("/jobs/{job_id}/retry")
+async def retry_job(
+    job_id: str,
+    lib: str | None = Form(None),
+    hx_request: str | None = Header(None),
+) -> RedirectResponse:
+    """Retry a failed or cancelled job."""
+    queue = JobQueue()
+    if not queue.retry(job_id):
+        raise HTTPException(status_code=409, detail="Job is not failed or cancelled")
+    return _home_redirect(lib, hx_request)
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job(
+    job_id: str,
+    lib: str | None = Form(None),
+    hx_request: str | None = Header(None),
+) -> RedirectResponse:
+    """Cancel a pending job (running downloads cannot be interrupted -> 409)."""
+    queue = JobQueue()
+    if not queue.cancel(job_id):
+        raise HTTPException(status_code=409, detail="Only pending jobs can be cancelled")
+    return _home_redirect(lib, hx_request)
 
 
 def _browser_redirect(db_conn: Any, video_id: str, lib: str | None) -> RedirectResponse:

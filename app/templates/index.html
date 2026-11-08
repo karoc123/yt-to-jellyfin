@@ -57,39 +57,5 @@
   </form>
 </div>
 
-<!-- Active Jobs Queue Section -->
-<section>
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-    <h3 style="font-size: 1.1rem;">Aktuelle Warteschlange</h3>
-    <span style="font-size: 13px; color: var(--text-muted);">{{ jobs|length }} Auftrag / Aufträge</span>
-  </div>
-
-  {% if jobs %}
-  <div class="grid">
-    {% for job in jobs %}
-    <div class="card" style="padding: 12px; gap: 8px;">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-        <span class="card-title">{{ job.payload.title or job.payload.url or job.id }}</span>
-        <span class="badge {% if job.status == 'completed' %}badge-pinned{% elif job.status == 'failed' %}btn-danger{% else %}badge-lib{% endif %}">
-          {{ job.status }}
-        </span>
-      </div>
-
-      <div class="progress-bar-container">
-        <div class="progress-bar-fill" style="width: {{ job.progress }}%;"></div>
-      </div>
-
-      <div class="card-meta">
-        <span>{{ job.progress }}%</span>
-        <span>Bibliothek: {{ job.payload.library or 'default' }}</span>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <div style="padding: 32px; text-align: center; color: var(--text-muted); border: 1px dashed var(--card-border); border-radius: var(--radius);">
-    Keine aktiven Downloads in der Warteschlange.
-  </div>
-  {% endif %}
-</section>
+{% include "components/queue.html" %}
 {% endblock %}
