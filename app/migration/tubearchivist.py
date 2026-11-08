@@ -10,6 +10,9 @@ import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+import httpx
 
 from app.core.config import settings
 from app.db.database import Database, db
@@ -38,6 +41,8 @@ class DiscoveredVideo:
     duration: int = 0
     thumbnail_path: Path | None = None
     info_json_path: Path | None = None
+    # Where the metadata came from: "info_json", "ta_api" or "" (unidentified -> skipped)
+    metadata_source: str = ""
 
 
 @dataclass
@@ -64,6 +69,8 @@ class TubeArchivistMigrator:
         dry_run: bool = False,
         auto_subscribe_discovered: bool = False,
         database: Database | None = None,
+        ta_url: str | None = None,
+        ta_token: str | None = None,
     ) -> None:
         self.source_dir = Path(source_dir) if source_dir else None
         self.dest_media_root = Path(
@@ -78,6 +85,142 @@ class TubeArchivistMigrator:
         self.auto_subscribe_discovered = auto_subscribe_discovered
         self.db = database if database is not None else db
         self.layout = JellyfinLayout(self.dest_media_root)
+        self.ta_url = ta_url.rstrip("/") if ta_url else None
+        self.ta_token = ta_token.strip() if ta_token else None
+        self._ta_videos: dict[str, dict[str, Any]] | None = None
+        self._ta_available = True
+        self._ta_channel_names: dict[str, str] = {}
+
+    # --- TubeArchivist REST API -------------------------------------------------
+
+    def _ta_enabled(self) -> bool:
+        return bool(self.ta_url and self.ta_token and self._ta_available)
+
+    def _ta_get(self, client: httpx.Client, path: str, **params: Any) -> dict[str, Any]:
+        resp = client.get(
+            f"{self.ta_url}{path}",
+            headers={"Authorization": f"Token {self.ta_token}"},
+            params=params or None,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, dict) else {}
+
+    def _load_ta_videos(self) -> dict[str, dict[str, Any]]:
+        """Fetch the paginated TA video index once, keyed by youtube_id."""
+        if self._ta_videos is not None:
+            return self._ta_videos
+        self._ta_videos = {}
+        if not self._ta_enabled():
+            return self._ta_videos
+
+        page = 1
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                while True:
+                    data = self._ta_get(client, "/api/video/", page=page)
+                    items = data.get("data") or []
+                    for doc in items:
+                        if isinstance(doc, dict) and doc.get("youtube_id"):
+                            self._ta_videos[str(doc["youtube_id"])] = doc
+                    last_page = (data.get("paginate") or {}).get("last_page") or 1
+                    if not items or page >= int(last_page):
+                        break
+                    page += 1
+        except Exception as exc:
+            logger.error("Could not fetch video index from TubeArchivist API: %s", exc)
+            if not self._ta_videos:
+                # API unreachable / unauthorized: don't hammer it per video.
+                self._ta_available = False
+        logger.info("Loaded %d video documents from TubeArchivist API", len(self._ta_videos))
+        return self._ta_videos
+
+    def _ta_video_doc(self, video_id: str) -> dict[str, Any] | None:
+        """Look up a video in the TA index, falling back to /api/video/<id>/ on a miss."""
+        if not (self.ta_url and self.ta_token):
+            return None
+        doc = self._load_ta_videos().get(video_id)
+        if doc is not None or not self._ta_enabled():
+            return doc
+        try:
+            with httpx.Client(timeout=20.0) as client:
+                data = self._ta_get(client, f"/api/video/{video_id}/")
+        except Exception as exc:
+            logger.warning("TubeArchivist API has no video %s: %s", video_id, exc)
+            return None
+        doc = data.get("data")
+        return doc if isinstance(doc, dict) else None
+
+    def _ta_channel_name(self, channel_id: str) -> str:
+        """Resolve a channel name via /api/channel/<id>/ (cached)."""
+        if channel_id in self._ta_channel_names:
+            return self._ta_channel_names[channel_id]
+        name = ""
+        if self._ta_enabled():
+            try:
+                with httpx.Client(timeout=20.0) as client:
+                    data = self._ta_get(client, f"/api/channel/{channel_id}/")
+                ch = data.get("data") or {}
+                name = str(ch.get("channel_name") or "") if isinstance(ch, dict) else ""
+            except Exception as exc:
+                logger.warning("TubeArchivist API has no channel %s: %s", channel_id, exc)
+        self._ta_channel_names[channel_id] = name
+        return name
+
+    @staticmethod
+    def _normalize_date(value: Any) -> str:
+        """Normalize TA/yt-dlp date variants (YYYY-MM-DD, ISO datetime, epoch) to YYYY-MM-DD."""
+        if value is None or value == "":
+            return ""
+        if isinstance(value, int | float) or (isinstance(value, str) and value.isdigit()):
+            text = str(value)
+            if len(text) == 8 and text.startswith(("19", "20")):
+                return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
+            return datetime.fromtimestamp(int(float(value)), tz=UTC).strftime("%Y-%m-%d")
+        text = str(value).strip()
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+        except ValueError:
+            pass
+        for fmt in ("%d %b, %Y", "%d %b %Y", "%b %d, %Y"):
+            try:
+                return datetime.strptime(text, fmt).strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+        match = re.match(r"^(\d{4})-(\d{2})-(\d{2})", text)
+        return "-".join(match.groups()) if match else ""
+
+    def _apply_ta_doc(self, doc: dict[str, Any], fallback_channel_id: str) -> dict[str, Any] | None:
+        """Map a TA video document onto our metadata fields; None if it lacks essentials."""
+        channel = doc.get("channel") if isinstance(doc.get("channel"), dict) else {}
+        channel_id = str(
+            channel.get("channel_id") or doc.get("channel_id") or fallback_channel_id or ""
+        )
+        channel_name = str(channel.get("channel_name") or doc.get("channel_name") or "")
+        if not channel_name and channel_id:
+            channel_name = self._ta_channel_name(channel_id)
+        player = doc.get("player") if isinstance(doc.get("player"), dict) else {}
+        try:
+            duration = int(float(player.get("duration") or doc.get("duration") or 0))
+        except (TypeError, ValueError):
+            duration = 0
+        try:
+            published_at = self._normalize_date(doc.get("published"))
+        except (TypeError, ValueError, OverflowError, OSError):
+            published_at = ""
+        title = str(doc.get("title") or "")
+        if not (title and channel_id and channel_name and published_at):
+            return None
+        return {
+            "title": title,
+            "channel_id": channel_id,
+            "channel_name": channel_name,
+            "published_at": published_at,
+            "description": str(doc.get("description") or ""),
+            "duration": duration,
+        }
+
+    # --- Scanning -----------------------------------------------------------------
 
     def scan_source(self) -> list[DiscoveredVideo]:
         """Scan source directory for videos and companion metadata."""
@@ -137,10 +280,13 @@ class TubeArchivistMigrator:
         description = ""
         published_at = ""
         duration = 0
+        metadata_source = ""
 
         if info_json_path:
             try:
                 data = json.loads(info_json_path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    raise ValueError("info.json is not an object")
                 video_id = str(data.get("id") or video_id)
                 title = str(data.get("title") or title)
                 channel_name = str(
@@ -161,8 +307,22 @@ class TubeArchivistMigrator:
                     published_at = datetime.fromtimestamp(data["timestamp"], tz=UTC).strftime(
                         "%Y-%m-%d"
                     )
+                metadata_source = "info_json"
             except Exception as exc:
                 logger.warning("Error reading info.json %s: %s", info_json_path, exc)
+
+        if not metadata_source:
+            # TubeArchivist keeps metadata in its index, not next to the file -> ask the API.
+            doc = self._ta_video_doc(video_id)
+            meta = self._apply_ta_doc(doc, channel_id) if doc else None
+            if meta:
+                title = meta["title"]
+                channel_id = meta["channel_id"]
+                channel_name = meta["channel_name"]
+                published_at = meta["published_at"]
+                description = meta["description"]
+                duration = meta["duration"]
+                metadata_source = "ta_api"
 
         # Check for companion channel metadata if channel_name is still default
         if channel_name == channel_id:
@@ -190,8 +350,8 @@ class TubeArchivistMigrator:
                 except Exception:
                     pass
 
-        # Fallback date if not extracted: file mtime
-        if not published_at:
+        # Fallback date (only for info.json without a date): file mtime
+        if metadata_source and not published_at:
             mtime = video_path.stat().st_mtime
             published_at = datetime.fromtimestamp(mtime, tz=UTC).strftime("%Y-%m-%d")
 
@@ -217,6 +377,7 @@ class TubeArchivistMigrator:
             duration=duration,
             thumbnail_path=thumbnail_path,
             info_json_path=info_json_path,
+            metadata_source=metadata_source,
         )
 
     def _transfer_file(self, src: Path, dst: Path) -> None:
@@ -250,6 +411,15 @@ class TubeArchivistMigrator:
         known_channels: set[str] = set()
 
         for item in candidates:
+            if not item.metadata_source:
+                msg = (
+                    f"Skipped video {item.video_id} ({item.video_path}): no metadata "
+                    "(no .info.json and not found via TubeArchivist API)"
+                )
+                logger.warning(msg)
+                result.errors.append(msg)
+                result.skipped_count += 1
+                continue
             try:
                 year = item.published_at.split("-")[0] if "-" in item.published_at else "Unknown"
 
@@ -423,7 +593,7 @@ def main() -> None:
     parser.add_argument(
         "--ta-url",
         default=None,
-        help="TubeArchivist instance URL (e.g. http://tubearchivist:8000) to fetch subscriptions",
+        help="TubeArchivist URL (e.g. http://tubearchivist:8000): subscriptions + video metadata",
     )
     parser.add_argument(
         "--ta-token",
@@ -519,6 +689,8 @@ def main() -> None:
             dry_run=args.dry_run,
             auto_subscribe_discovered=args.auto_subscribe_discovered,
             database=database,
+            ta_url=args.ta_url,
+            ta_token=args.ta_token,
         )
 
         result = migrator.migrate()
@@ -526,12 +698,15 @@ def main() -> None:
         print("\n--- Media Migration Summary ---")
         print(f"Scanned Videos:   {result.scanned_count}")
         print(f"Migrated Videos:  {result.migrated_count}")
+        print(f"Skipped Videos:   {result.skipped_count} (no metadata)")
         print(f"Failed Videos:    {result.failed_count}")
         print(f"Channels Created: {result.channels_created}")
         if result.errors:
             print(f"Errors ({len(result.errors)}):")
-            for err in result.errors[:10]:
+            for err in result.errors[:20]:
                 print(f"  - {err}")
+            if len(result.errors) > 20:
+                print(f"  ... and {len(result.errors) - 20} more (see log)")
         print("-------------------------------")
 
         if result.failed_count > 0:

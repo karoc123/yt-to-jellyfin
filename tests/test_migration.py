@@ -41,7 +41,7 @@ def tubearchivist_source(tmp_path: Path) -> Path:
     (channel_dir / "vid12345678.info.json").write_text(json.dumps(v1_info), encoding="utf-8")
     (channel_dir / "vid12345678.jpg").write_bytes(b"dummy thumbnail 1")
 
-    # Video 2: fallback without info.json
+    # Video 2: no info.json and no TA API -> unidentifiable, must be skipped
     v2_file = channel_dir / "vid87654321.mkv"
     v2_file.write_bytes(b"dummy video data 2")
 
@@ -68,10 +68,12 @@ def test_tubearchivist_scan(tubearchivist_source: Path, tmp_path: Path, test_db:
     assert c1.duration == 720
     assert c1.thumbnail_path is not None
 
-    # Verify candidate 2 (fallback metadata)
+    assert c1.metadata_source == "info_json"
+
+    # Candidate 2 has no metadata source -> migrate() skips it instead of inventing names
     c2 = next(c for c in candidates if c.video_id == "vid87654321")
-    assert c2.video_id == "vid87654321"
     assert c2.channel_id == "UC12345channel"
+    assert c2.metadata_source == ""
 
 
 def test_tubearchivist_migration_copy_mode(
@@ -90,9 +92,15 @@ def test_tubearchivist_migration_copy_mode(
 
     result = migrator.migrate()
     assert result.scanned_count == 2
-    assert result.migrated_count == 2
+    assert result.migrated_count == 1
+    assert result.skipped_count == 1
     assert result.failed_count == 0
     assert result.channels_created >= 1
+    assert any("vid87654321" in e for e in result.errors), result.errors
+    # The unidentifiable video is neither placed under its channel id nor kept in the DB
+    assert not (dest_dir / "dokus" / "UC12345channel").exists()
+    assert not list(dest_dir.rglob("*vid87654321*"))
+    assert (tubearchivist_source / "UC12345channel" / "vid87654321.mkv").is_file()
 
     # Verify destination files
     channel_folder = dest_dir / "dokus" / "Science Today"
@@ -154,7 +162,8 @@ def test_tubearchivist_migration_dry_run(
 
     result = migrator.migrate()
     assert result.scanned_count == 2
-    assert result.migrated_count == 2
+    assert result.migrated_count == 1
+    assert result.skipped_count == 1
     assert not dest_dir.exists()
 
     with test_db.connection() as conn:

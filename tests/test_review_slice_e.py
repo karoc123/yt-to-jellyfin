@@ -109,7 +109,6 @@ def _all_files(root: Path) -> list[Path]:
     return [p for p in root.rglob("*") if p.is_file()] if root.exists() else []
 
 
-@pytest.mark.xfail(strict=True, reason="E1: no metadata -> migrates ID-named garbage")
 def test_e1_without_metadata_video_is_skipped_and_reported(
     ta_source: Path, tmp_path: Path, test_db: Database
 ) -> None:
@@ -168,7 +167,6 @@ def _assert_migrated_with_ta_metadata(dest: Path, test_db: Database) -> None:
         assert ch["name"] == CHANNEL_NAME
 
 
-@pytest.mark.xfail(strict=True, reason="E1: migrator cannot fetch metadata from TA API")
 @pytest.mark.parametrize(
     "mock_ta_api",
     ["2024-03-15", "2024-03-15T12:34:56+00:00"],
@@ -202,7 +200,6 @@ def test_e1_metadata_from_ta_api(
     _assert_migrated_with_ta_metadata(dest, test_db)
 
 
-@pytest.mark.xfail(strict=True, reason="E1: CLI --ta-url/--ta-token unused for media metadata")
 def test_e1_cli_uses_ta_credentials_for_media(
     ta_source: Path,
     tmp_path: Path,

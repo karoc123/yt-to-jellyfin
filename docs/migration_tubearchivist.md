@@ -9,6 +9,11 @@
 In TubeArchivist:
 * **Media files** live in `/youtube/<channel_id>/<video_id>.mp4`.
 * **Channel subscriptions** (`channel_subscribed: true`) live in TubeArchivist's internal database (API or Elasticsearch).
+* **Video metadata** (title, channel, date) also lives only in TubeArchivist's index, not next to the files.
+
+> [!NOTE]
+> For `--source`, metadata comes from a companion `<id>.info.json` if present, otherwise from the TubeArchivist API (`--ta-url` + `--ta-token`).
+> Videos without metadata from either source are **skipped and listed** in the summary — the source file stays untouched. Re-run with API access to migrate them.
 
 > [!IMPORTANT]
 > `yt-to-jellyfin` deliberately **does NOT automatically subscribe** to channels simply because a video exists in the archive (`auto_download = 0`). This ensures that one-off video downloads don't trigger unwanted recurring background downloads.
@@ -68,12 +73,13 @@ Standard OPML files (e.g. exported from YouTube Takeout, NewPipe, or RSS aggrega
 ## 4. Migration Examples
 
 ### A. Migrate Media and Subscriptions Together
-Migrates videos into Jellyfin Season folders via hardlinks AND imports all subscriptions from a JSON/OPML file:
+Migrates videos into Jellyfin Season folders via hardlinks (metadata from the TubeArchivist API) AND imports all subscriptions via the API:
 ```bash
 uv run migrate-tubearchivist \
   --source /mnt/tubearchivist/youtube \
   --dest /media \
-  --subscriptions /path/to/subscriptions.json \
+  --ta-url http://tubearchivist:8000 \
+  --ta-token YOUR_TOKEN \
   --mode hardlink \
   --library default
 ```
