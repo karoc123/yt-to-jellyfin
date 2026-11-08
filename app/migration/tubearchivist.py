@@ -13,6 +13,7 @@ from pathlib import Path
 
 from app.core.config import settings
 from app.db.database import Database, db
+from app.jellyfin.episodes import assign_episode
 from app.jellyfin.layout import JellyfinLayout, sanitize_filename
 from app.jellyfin.nfo import NfoGenerator
 from app.migration.subscriptions import SubscriptionsMigrator
@@ -279,6 +280,12 @@ class TubeArchivistMigrator:
 
                 # Write XML NFOs
                 if not self.dry_run:
+                    # Stable episode number (MMDD + per-channel daily counter)
+                    with self.db.connection() as conn:
+                        episode = assign_episode(
+                            conn, item.video_id, item.channel_id, item.published_at
+                        )
+
                     # Write episode NFO
                     NfoGenerator.write_episode_nfo(
                         dest_path=dest_nfo_path,
@@ -286,7 +293,7 @@ class TubeArchivistMigrator:
                         plot=item.description,
                         aired=item.published_at,
                         season=int(year) if year.isdigit() else None,
-                        episode=1,
+                        episode=episode,
                         duration_seconds=item.duration,
                         video_id=item.video_id,
                         channel_name=item.channel_name,
@@ -346,10 +353,10 @@ class TubeArchivistMigrator:
                             """
                             INSERT INTO videos (
                                 id, channel_id, title, description, published_at, duration,
-                                file_path, nfo_path, thumbnail_path, file_size, status,
-                                created_at, updated_at
+                                file_path, nfo_path, thumbnail_path, file_size, episode,
+                                status, created_at, updated_at
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
                             ON CONFLICT(id) DO UPDATE SET
                                 channel_id = excluded.channel_id,
                                 title = excluded.title,
@@ -360,6 +367,7 @@ class TubeArchivistMigrator:
                                 nfo_path = excluded.nfo_path,
                                 thumbnail_path = excluded.thumbnail_path,
                                 file_size = excluded.file_size,
+                                episode = COALESCE(videos.episode, excluded.episode),
                                 status = 'completed',
                                 updated_at = excluded.updated_at
                             """,
@@ -374,6 +382,7 @@ class TubeArchivistMigrator:
                                 str(dest_nfo_path),
                                 str(dest_thumb_path) if dest_thumb_path else None,
                                 file_size,
+                                episode,
                                 now_str,
                                 now_str,
                             ),

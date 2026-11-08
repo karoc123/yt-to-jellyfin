@@ -13,6 +13,7 @@ from app.downloader.exceptions import VideoUnavailableError
 from app.downloader.options import DownloadOptions, ProgressUpdate
 from app.downloader.service import YtDlpService, downloader, wrap_progress_hook
 from app.jellyfin import JellyfinLayout, NfoGenerator, jellyfin_layout, nfo_generator
+from app.jellyfin.episodes import assign_episode
 from app.retention.engine import RetentionConfig, RetentionEngine
 from app.worker.models import MAX_VIDEO_ATTEMPTS, Job, utc_now_str
 from app.worker.poller import SubscriptionPoller
@@ -333,7 +334,11 @@ class BackgroundWorker:
             download_kwargs["info"] = meta.raw_info
         result = await self.downloader.async_download(**download_kwargs)
 
-        # Step 5: Write episode .nfo companion metadata
+        # Step 5: Write episode .nfo with a stable episode number (MMDD + daily counter)
+        now = utc_now_str()
+        published_at = meta.upload_date or now
+        with self.db.connection() as conn:
+            episode = assign_episode(conn, result.id, channel_id, published_at)
         ep_nfo_path = self.layout.get_episode_nfo_path(result.video_path)
         self.nfo.write_episode_nfo(
             dest_path=ep_nfo_path,
@@ -341,6 +346,7 @@ class BackgroundWorker:
             plot=meta.description,
             aired=meta.upload_date,
             season=int(year) if year.isdigit() else 1,
+            episode=episode,
             duration_seconds=meta.duration,
             video_id=meta.id,
             channel_name=channel_name,
@@ -350,7 +356,6 @@ class BackgroundWorker:
         )
 
         # Step 6: Upsert video record in database
-        now = utc_now_str()
         with self.db.connection() as conn:
             # Check or create channel if not present
             conn.execute(
@@ -376,9 +381,10 @@ class BackgroundWorker:
                 """
                 INSERT INTO videos (
                     id, channel_id, title, description, published_at, duration,
-                    file_path, nfo_path, thumbnail_path, file_size, status, created_at, updated_at
+                    file_path, nfo_path, thumbnail_path, file_size, episode, status,
+                    created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     channel_id = excluded.channel_id,
                     title = excluded.title,
@@ -389,6 +395,7 @@ class BackgroundWorker:
                     nfo_path = excluded.nfo_path,
                     thumbnail_path = excluded.thumbnail_path,
                     file_size = excluded.file_size,
+                    episode = COALESCE(videos.episode, excluded.episode),
                     status = excluded.status,
                     attempts = 0,
                     last_error = NULL,
@@ -400,12 +407,13 @@ class BackgroundWorker:
                     channel_id,
                     meta.title,
                     meta.description,
-                    meta.upload_date or now,
+                    published_at,
                     meta.duration,
                     str(result.video_path),
                     str(ep_nfo_path),
                     str(result.thumbnail_path) if result.thumbnail_path else None,
                     result.file_size,
+                    episode,
                     now,
                     now,
                 ),

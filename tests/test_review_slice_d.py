@@ -345,7 +345,6 @@ def _episode_of(media_root: Path, video_id: str) -> int:
     return int(ET.parse(nfos[0]).getroot().findtext("episode"))
 
 
-@pytest.mark.xfail(strict=True, reason="D4: every episode is number 1")
 def test_d4_episode_numbers_from_date(
     fake_ydl: type[FakeYoutubeDL], temp_db: Database, media_root: Path
 ) -> None:

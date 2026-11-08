@@ -192,3 +192,32 @@ def test_nfo_generator_write_files(tmp_path: Path) -> None:
     ep_root = DefusedET.fromstring(written_ep.read_text(encoding="utf-8"))
     assert ep_root.find("season").text == "2022"
     assert ep_root.find("runtime").text == "30"
+
+
+def test_assign_episode_is_stable(tmp_path: Path) -> None:
+    """Episode numbers: MMDD + daily counter, never reused or renumbered."""
+    from app.db import Database
+    from app.jellyfin.episodes import assign_episode, episode_number
+
+    assert episode_number("2024-03-15", 1) == 31501
+    assert episode_number("20241231T10:00:00Z", 2) == 123102
+
+    database = Database(db_path=tmp_path / "episodes.db")
+    database.run_migrations()
+    with database.connection() as conn:
+        conn.execute(
+            "INSERT INTO channels (id, name, url, folder_name) VALUES ('UCep', 'Ep', 'u', 'Ep')"
+        )
+        for vid in ("vidEp1", "vidEp2"):
+            ep = assign_episode(conn, vid, "UCep", "2024-03-15")
+            conn.execute(
+                "INSERT INTO videos (id, channel_id, title, published_at, episode)"
+                " VALUES (?, 'UCep', 't', '2024-03-15', ?)",
+                (vid, ep),
+            )
+        assert assign_episode(conn, "vidEp1", "UCep", "2024-03-15") == 31501
+        assert assign_episode(conn, "vidEp2", "UCep", "2024-03-15") == 31502
+        # Tombstoned sibling keeps its number; a new video does not reuse it
+        conn.execute("UPDATE videos SET status = 'deleted' WHERE id = 'vidEp1'")
+        assert assign_episode(conn, "vidEp3", "UCep", "2024-03-15") == 31503
+        assert assign_episode(conn, "vidEp3", "UCep", "2024-03-16") == 31601
