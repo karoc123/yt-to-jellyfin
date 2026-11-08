@@ -117,6 +117,12 @@ async def get_video_thumbnail(
     return FileResponse(str(path))
 
 
+def _positive_int_or_none(value: str | None) -> int | None:
+    """Parse a retention form value; empty or 0 means unlimited (stored as NULL)."""
+    value = (value or "").strip()
+    return int(value) if value.isdigit() and int(value) > 0 else None
+
+
 @router.post("/subscriptions")
 async def add_subscription(
     channel_input: str = Form(...),
@@ -131,8 +137,8 @@ async def add_subscription(
     if "/" in channel_id:
         channel_id = channel_id.rstrip("/").split("/")[-1]
 
-    r_count = int(retention_count) if retention_count and retention_count.isdigit() else None
-    r_days = int(retention_days) if retention_days and retention_days.isdigit() else None
+    r_count = _positive_int_or_none(retention_count)
+    r_days = _positive_int_or_none(retention_days)
 
     feed_url = f"https://www.youtube.com/feeds/videos.xml?channel_id={channel_id}"
 

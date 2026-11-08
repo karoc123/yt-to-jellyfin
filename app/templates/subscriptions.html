@@ -128,8 +128,8 @@
       </div>
 
       <div style="font-size: 13px; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px;">
-        <span>Episoden-Limit: {% if ch.retention_count %}{{ ch.retention_count }} Videos{% else %}Unbegrenzt{% endif %}</span>
-        <span>Aufbewahrungszeit: {% if ch.retention_days %}{{ ch.retention_days }} Tage{% else %}Unbegrenzt{% endif %}</span>
+        <span>Episoden-Limit: {% if ch.retention_count and ch.retention_count > 0 %}{{ ch.retention_count }} Videos{% else %}Unbegrenzt{% endif %}</span>
+        <span>Aufbewahrungszeit: {% if ch.retention_days and ch.retention_days > 0 %}{{ ch.retention_days }} Tage{% else %}Unbegrenzt{% endif %}</span>
       </div>
 
       <div class="card-actions" style="margin-top: 8px;">

@@ -152,9 +152,6 @@ def test_a2_resubscribe_keeps_videos(test_client: TestClient, temp_db: Database)
     assert row["is_pinned"] == 1
 
 
-@pytest.mark.xfail(
-    strict=True, reason="A3: retention_count=0 deletes everything instead of unlimited"
-)
 def test_a3_retention_count_zero_means_unlimited(temp_db: Database) -> None:
     engine = RetentionEngine(database=temp_db)
     now = datetime.now(UTC)
@@ -179,6 +176,28 @@ def test_a3_retention_count_zero_means_unlimited(temp_db: Database) -> None:
     with temp_db.connection() as conn:
         count = conn.execute("SELECT COUNT(*) FROM videos").fetchone()[0]
     assert count == 3
+
+
+@pytest.mark.parametrize("value", ["0", "", " "])
+def test_a3_subscription_zero_or_empty_retention_stored_as_null(
+    test_client: TestClient, temp_db: Database, value: str
+) -> None:
+    form = {
+        "channel_input": "UCnull0001",
+        "name": "Null Channel",
+        "library": "default",
+        "retention_count": value,
+        "retention_days": value,
+    }
+    res = test_client.post("/api/subscriptions", data=form, follow_redirects=False)
+    assert res.status_code == 303
+
+    with temp_db.connection() as conn:
+        row = conn.execute(
+            "SELECT retention_count, retention_days FROM channels WHERE id = 'UCnull0001'"
+        ).fetchone()
+    assert row["retention_count"] is None
+    assert row["retention_days"] is None
 
 
 @pytest.mark.xfail(strict=True, reason="A4: sync endpoint blocks the event loop (sync httpx)")

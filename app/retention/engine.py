@@ -148,7 +148,7 @@ class RetentionEngine:
                 else (global_config.max_count if global_config else None)
             )
 
-            if ttl_days is None and max_count is None:
+            if (ttl_days is None or ttl_days <= 0) and (max_count is None or max_count <= 0):
                 # No retention policy configured for this channel
                 return []
 
@@ -185,7 +185,7 @@ class RetentionEngine:
                     logger.warning("Could not parse published_at for video %s: %s", v["id"], exc)
 
         # 2. Max count check (keep latest N videos)
-        if max_count is not None and max_count >= 0:
+        if max_count is not None and max_count > 0:
             # Remaining candidate videos that haven't already been marked by TTL
             for idx, v in enumerate(videos):
                 if idx >= max_count:
