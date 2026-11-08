@@ -387,7 +387,6 @@ def test_d5_channel_poster_written(
 COMPANION_SUFFIXES = [".mp4", ".nfo", "-thumb.jpg", ".de.vtt", ".zh-Hans.vtt", ".f399.mp4.part"]
 
 
-@pytest.mark.xfail(strict=True, reason="D6: filename may exceed 255 bytes")
 @pytest.mark.parametrize("char", ["字", "\U0001f600"], ids=["cjk", "emoji"])
 def test_d6_filename_fits_255_bytes(char: str) -> None:
     layout = JellyfinLayout(media_root="/nonexistent")

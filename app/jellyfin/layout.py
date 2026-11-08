@@ -7,6 +7,19 @@ from app.core.config import settings
 
 DEFAULT_LIBRARY_NAME = "default"
 
+# Filesystem name limit (ext4, btrfs, ...) and room for the longest companion/temp suffix
+# appended to a video stem (e.g. ".f399.mp4.part", ".zh-Hans.vtt", "-thumb.jpg")
+MAX_FILENAME_BYTES = 255
+COMPANION_SUFFIX_RESERVE = 32
+
+
+def truncate_utf8(text: str, max_bytes: int) -> str:
+    """Cut `text` to at most `max_bytes` UTF-8 bytes without splitting a character."""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[: max(max_bytes, 0)].decode("utf-8", errors="ignore")
+
 
 def sanitize_filename(name: str) -> str:
     r"""Sanitize string for cross-platform filesystem paths.
@@ -74,19 +87,29 @@ class JellyfinLayout:
         video_id: str,
         extension: str = "mp4",
     ) -> str:
-        """Format video filename: <Date> - <Title> [<ID>].<ext>."""
+        """Format video filename: <Date> - <Title> [<ID>].<ext>.
+
+        Long titles are truncated UTF-8-safely so that the stem plus any companion
+        suffix stays within MAX_FILENAME_BYTES.
+        """
         safe_date = str(date_str).strip()
         # If date is YYYYMMDD, format as YYYY-MM-DD
         if len(safe_date) == 8 and safe_date.isdigit():
             safe_date = f"{safe_date[:4]}-{safe_date[4:6]}-{safe_date[6:8]}"
 
-        safe_title = sanitize_filename(title)
         safe_id = sanitize_filename(video_id)
         ext = extension.lstrip(".")
+        prefix = f"{safe_date} - " if safe_date else ""
+        tail = f" [{safe_id}]"
 
-        if safe_date:
-            return f"{safe_date} - {safe_title} [{safe_id}].{ext}"
-        return f"{safe_title} [{safe_id}].{ext}"
+        # Keep stem + any companion suffix within the filesystem limit; date and ID stay intact
+        budget = MAX_FILENAME_BYTES - COMPANION_SUFFIX_RESERVE - len((prefix + tail).encode())
+        safe_title = sanitize_filename(title)
+        truncated = truncate_utf8(safe_title, budget).rstrip(". ")
+        if truncated != safe_title:
+            safe_title = truncated or "Unknown"
+
+        return f"{prefix}{safe_title}{tail}.{ext}"
 
     def get_video_path(
         self,
