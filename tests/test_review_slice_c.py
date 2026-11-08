@@ -111,7 +111,6 @@ def test_c2_worker_passes_cookies(
 # --- C3: FORMAT_SORT / THROTTLED_RATE_BYTES are read ----------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="C3: FORMAT_SORT/THROTTLED_RATE_BYTES never read")
 def test_c3_worker_uses_format_sort_and_throttle_env(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, temp_db: Database
 ) -> None:

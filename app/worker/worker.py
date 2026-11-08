@@ -184,11 +184,17 @@ class BackgroundWorker:
         url = payload.get("url") or f"https://www.youtube.com/watch?v={payload.get('video_id')}"
         library = payload.get("library") or "default"
 
-        # Read format and SponsorBlock settings from payload or defaults
-        format_selector = payload.get("format") or payload.get("format_selector")
-        format_sort = payload.get("format_sort")
-        max_height = payload.get("max_height")
-        throttled_rate = payload.get("throttled_rate_bytes") or payload.get("throttled_rate")
+        # Read format and SponsorBlock settings from payload, falling back to env settings
+        format_selector = (
+            payload.get("format") or payload.get("format_selector") or settings.default_format
+        )
+        format_sort = payload.get("format_sort") or settings.format_sort
+        max_height = payload.get("max_height") or settings.default_max_height
+        throttled_rate = (
+            payload.get("throttled_rate_bytes")
+            or payload.get("throttled_rate")
+            or settings.throttled_rate_bytes
+        )
         sponsorblock_remove = payload.get("sponsorblock_remove", [])
         sponsorblock_mark = payload.get("sponsorblock_mark", [])
 

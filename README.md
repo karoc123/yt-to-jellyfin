@@ -64,7 +64,7 @@ services:
       # - COOKIES_PATH=/cookies/cookies.txt
       # Optional: Format sort parameter (e.g. res:1080,fps)
       # - FORMAT_SORT=res:1080,fps
-      # Optional: Throttled download rate in bytes/sec
+      # Optional: re-extract downloads slower than N bytes/sec
       # - THROTTLED_RATE_BYTES=5242880
     volumes:
       - ./data:/data
@@ -89,7 +89,9 @@ Open **`http://<your-server-ip>:8099`** in your browser.
 | `DATABASE_PATH` | `/data/app.db` | Path to SQLite database (set e.g. `data/app.db` for local dev) |
 | `COOKIES_PATH` | `/data/cookies.txt` | Netscape `cookies.txt` for member or age-restricted videos (used only if the file exists) |
 | `FORMAT_SORT` | *None* | Custom `yt-dlp` format sorting criteria (e.g. `res:1080,fps,codec:h264`) |
-| `THROTTLED_RATE_BYTES` | *None* | Download speed throttle in bytes/second |
+| `THROTTLED_RATE_BYTES` | *None* | Re-extract a download that drops below N bytes/second (yt-dlp `--throttled-rate`) |
+| `DEFAULT_FORMAT` | *None* | `yt-dlp` format selector (default `bestvideo*+bestaudio/best`) |
+| `DEFAULT_MAX_HEIGHT` | *None* | Maximum video height (e.g. `1080`) when the job does not set one |
 | `RSS_POLL_INTERVAL` | `900` | Seconds between RSS polls / retention runs |
 | `RETENTION_DAYS` | *None* | Global default: delete unpinned videos older than N days (channel rule wins) |
 | `RETENTION_COUNT` | *None* | Global default: keep only the latest N videos per channel (channel rule wins) |

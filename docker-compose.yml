@@ -16,7 +16,7 @@ services:
       # - COOKIES_PATH=/cookies/cookies.txt
       # Optional: TubeArchivist-style format sort (e.g. res:1080,fps,codec:h264)
       # - FORMAT_SORT=res:1080,fps
-      # Optional: Throttled download rate in bytes/sec (e.g. 5242880 for 5MB/s)
+      # Optional: re-extract downloads slower than N bytes/sec (e.g. 5242880 = 5 MB/s)
       # - THROTTLED_RATE_BYTES=5242880
     volumes:
       - ./data:/data
