@@ -12,23 +12,23 @@
   {% set lib_qs = '?lib=' ~ (current_lib|urlencode) if current_lib and current_lib != 'all' else '' %}
   <header>
     <div class="header-container">
-      <a href="/{{ lib_qs }}" class="logo">
+      <a href="/{{ lib_qs }}" class="logo" data-tooltip="yt-to-jellyfin Home" data-tooltip-pos="bottom" title="yt-to-jellyfin Home">
         <span aria-hidden="true">🎬</span> yt-to-jellyfin
       </a>
 
       <!-- Library Switcher Pills: the active library lives in the URL (?lib=) only -->
       <div class="library-switcher" id="lib-switcher">
-        <a href="{{ request.url.path }}" class="lib-pill {% if not current_lib or current_lib == 'all' %}active{% endif %}">🌐 All</a>
+        <a href="{{ request.url.path }}" class="lib-pill {% if not current_lib or current_lib == 'all' %}active{% endif %}" data-tooltip="Show content from all libraries" data-tooltip-pos="bottom" title="Show all libraries">🌐 All</a>
         {% for lib in library_options() %}
-        <a href="{{ request.url.path }}?lib={{ lib.name|urlencode }}" class="lib-pill {% if current_lib == lib.name %}active{% endif %}">{{ lib.icon }} {{ lib.label }}</a>
+        <a href="{{ request.url.path }}?lib={{ lib.name|urlencode }}" class="lib-pill {% if current_lib == lib.name %}active{% endif %}" data-tooltip="Filter by library: {{ lib.label }}" data-tooltip-pos="bottom" title="Filter by library: {{ lib.label }}">{{ lib.icon }} {{ lib.label }}</a>
         {% endfor %}
       </div>
 
       <nav class="nav-links">
-        <a href="/{{ lib_qs }}" class="nav-link {% if active_page == 'home' %}active{% endif %}">Download</a>
-        <a href="/browser{{ lib_qs }}" class="nav-link {% if active_page == 'browser' %}active{% endif %}">Library</a>
-        <a href="/subscriptions{{ lib_qs }}" class="nav-link {% if active_page == 'subscriptions' %}active{% endif %}">Subscriptions</a>
-        <a href="/settings{{ lib_qs }}" class="nav-link {% if active_page == 'settings' %}active{% endif %}">Settings</a>
+        <a href="/{{ lib_qs }}" class="nav-link {% if active_page == 'home' %}active{% endif %}" data-tooltip="Single video or playlist quick download" data-tooltip-pos="bottom" title="Quick Download">Download</a>
+        <a href="/browser{{ lib_qs }}" class="nav-link {% if active_page == 'browser' %}active{% endif %}" data-tooltip="Browse channels and videos in Jellyfin libraries" data-tooltip-pos="bottom" title="Library Overview">Library</a>
+        <a href="/subscriptions{{ lib_qs }}" class="nav-link {% if active_page == 'subscriptions' %}active{% endif %}" data-tooltip="Manage automated subscriptions and sync" data-tooltip-pos="bottom" title="Subscriptions">Subscriptions</a>
+        <a href="/settings{{ lib_qs }}" class="nav-link {% if active_page == 'settings' %}active{% endif %}" data-tooltip="Configure libraries, cookies, formats, and retention" data-tooltip-pos="bottom" title="Settings">Settings</a>
       </nav>
     </div>
   </header>

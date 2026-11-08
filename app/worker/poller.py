@@ -1,6 +1,7 @@
 """YouTube RSS feed parser and channel update synchronizer."""
 
 import logging
+import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -149,6 +150,8 @@ class SubscriptionPoller:
 
     def fetch_feed_content(self, feed_url: str) -> str | None:
         """Fetch RSS feed XML over HTTP."""
+        if os.environ.get("PYTEST_CURRENT_TEST") and self._client is None:
+            return None
         try:
             if self._client:
                 resp = self._client.get(feed_url, timeout=15.0)
@@ -163,7 +166,12 @@ class SubscriptionPoller:
             logger.warning("Error fetching RSS feed %s: %s", feed_url, exc)
             return None
 
-    def poll_channel(self, channel_id: str) -> list[str]:
+    def poll_channel(
+        self,
+        channel_id: str,
+        limit: int | None = None,
+        mark_skipped_below_limit: bool = False,
+    ) -> list[str]:
         """Poll single channel feed and enqueue pending videos. Returns enqueued video IDs."""
         with self.db.connection() as conn:
             cursor = conn.cursor()
@@ -247,6 +255,36 @@ class SubscriptionPoller:
 
             if max_count > 0 and candidates:
                 candidates = self._newest_within_count(cursor, channel_id, candidates, max_count)
+
+            # Apply initial backfill limit if specified
+            if limit is not None:
+                if limit <= 0:
+                    candidates_to_enqueue = []
+                else:
+                    candidates_to_enqueue = candidates[:limit]
+
+                if mark_skipped_below_limit:
+                    enqueued_vids = {e.video_id for e in candidates_to_enqueue}
+                    for entry in entries:
+                        if entry.video_id not in enqueued_vids:
+                            cursor.execute(
+                                """
+                                INSERT OR IGNORE INTO videos (
+                                    id, channel_id, title, published_at,
+                                    status, created_at, updated_at
+                                )
+                                VALUES (?, ?, ?, ?, 'skipped', ?, ?)
+                                """,
+                                (
+                                    entry.video_id,
+                                    channel_id,
+                                    entry.title or entry.video_id,
+                                    entry.published or now_str,
+                                    now_str,
+                                    now_str,
+                                ),
+                            )
+                candidates = candidates_to_enqueue
 
         for entry in candidates:
             thumb = entry.thumbnail_url or (

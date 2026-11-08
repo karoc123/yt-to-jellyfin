@@ -329,6 +329,30 @@ def test_subscriptions_import_endpoint(test_client: TestClient, tmp_path: Path) 
         assert row["auto_download"] == 1
 
 
+def test_import_subscriptions_form_location(test_client: TestClient) -> None:
+    """Import subscriptions block is located on /settings, not on /subscriptions."""
+    res_subs = test_client.get("/subscriptions")
+    assert res_subs.status_code == 200
+    assert 'action="/api/subscriptions/import"' not in res_subs.text
+
+    res_settings = test_client.get("/settings")
+    assert res_settings.status_code == 200
+    assert 'action="/api/subscriptions/import"' in res_settings.text
+    assert "Import Subscriptions (TubeArchivist / OPML / JSON)" in res_settings.text
+
+
+def test_import_subscriptions_empty_redirects_to_settings(test_client: TestClient) -> None:
+    """Submitting empty import form redirects back to settings with error flash."""
+    res = test_client.post(
+        "/api/subscriptions/import",
+        data={"library": "default"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert res.headers["location"].startswith("/settings")
+    assert "msg=import_missing" in res.headers["location"]
+
+
 def test_browser_shows_channel_poster(
     test_client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -467,3 +491,54 @@ async def test_fetch_youtube_oembed_parser() -> None:
         assert res["title"] == "Mock Video Title"
         assert res["channel_name"] == "Mock Author"
         assert res["thumbnail"] == "https://i.ytimg.com/vi/mock/hqdefault.jpg"
+
+
+def test_browser_subscribe_workflow(test_client: TestClient, tmp_path: Path) -> None:
+    """Test subscribing retroactively to a channel from the Library Overview (/browser)."""
+    test_db = Database(tmp_path / "web_test.db")
+    with test_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO channels (id, name, url, folder_name, library, auto_download)
+            VALUES ('UCresub', 'Resub', 'https://youtube.com/@resub', 'Resub', 'default', 0)
+            """
+        )
+
+    # In browser channel view, channel shows as Not Subscribed and shows Subscribe button
+    res = test_client.get("/browser?channel_id=UCresub")
+    assert res.status_code == 200
+    assert "Not Subscribed" in res.text
+    assert "subscribe-modal" in res.text
+
+    # Submit subscription from browser modal
+    sub_data = {
+        "channel_input": "UCresub",
+        "name": "Resub Channel",
+        "library": "default",
+        "initial_download": "0",
+        "return_to": "/browser",
+        "channel_id_redirect": "UCresub",
+    }
+    res_sub = test_client.post("/api/subscriptions", data=sub_data, follow_redirects=False)
+    assert res_sub.status_code == 303
+    assert "/browser" in res_sub.headers["location"]
+    assert "channel_id=UCresub" in res_sub.headers["location"]
+
+    # Verify channel is now auto_download = 1 in DB
+    with test_db.connection() as conn:
+        row = conn.execute("SELECT auto_download FROM channels WHERE id = 'UCresub'").fetchone()
+        assert row is not None
+        assert row["auto_download"] == 1
+
+    # In browser channel view, channel now shows as Subscribed
+    res_after = test_client.get("/browser?channel_id=UCresub")
+    assert res_after.status_code == 200
+    assert "Subscribed" in res_after.text
+
+
+def test_ui_tooltips_present(test_client: TestClient) -> None:
+    """Test that data-tooltip attributes are present across all main views."""
+    for path in ["/", "/browser", "/subscriptions", "/settings"]:
+        res = test_client.get(path)
+        assert res.status_code == 200
+        assert "data-tooltip=" in res.text

@@ -7,7 +7,7 @@
   <div>
     <h2 class="page-title">Settings</h2>
     <p class="text-muted-sm">
-      Libraries, authentication, video quality, retention, and Jellyfin integration
+      Libraries, authentication, video quality, retention, subscription imports, and Jellyfin integration
     </p>
   </div>
 </div>
@@ -51,7 +51,7 @@
           {% if lib.name != "default" and lib.channel_count == 0 %}
           <form action="/api/settings/libraries/{{ lib.name }}/delete" method="POST" onsubmit="return confirm('Really delete library?');">
             <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+            <button type="submit" class="btn btn-danger btn-sm" data-tooltip="Delete library (only when empty)" title="Delete library">Delete</button>
           </form>
           {% elif lib.name == "default" %}
           <span class="text-muted-sm">Default</span>
@@ -82,7 +82,7 @@
       </div>
     </div>
     <div class="form-actions-bar">
-      <button type="submit" class="btn btn-sm">
+      <button type="submit" class="btn btn-sm" data-tooltip="Create new Jellyfin library folder" title="Create Library">
         <span aria-hidden="true">➕</span> Create Library
       </button>
     </div>
@@ -123,11 +123,11 @@
     </div>
 
     <div class="form-actions-bar">
-      <button type="submit" class="btn">
+      <button type="submit" class="btn" data-tooltip="Save YouTube authentication cookies" title="Save Cookies">
         <span aria-hidden="true">💾</span> Save Cookies
       </button>
       {% if cookies_saved %}
-      <button type="button" class="btn btn-secondary" hx-post="/api/settings/cookies/test" hx-target="#cookie-test-result" hx-swap="innerHTML">
+      <button type="button" class="btn btn-secondary" hx-post="/api/settings/cookies/test" hx-target="#cookie-test-result" hx-swap="innerHTML" data-tooltip="Verify cookies against YouTube" title="Test Cookies">
         <span aria-hidden="true">🔍</span> Test Cookies
       </button>
       {% endif %}
@@ -140,7 +140,7 @@
   <div class="delete-cookies-wrapper">
     <form action="/api/settings/cookies/delete" method="POST" onsubmit="return confirm('Really delete saved cookies?');">
       <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-      <button type="submit" class="btn btn-danger btn-sm">
+      <button type="submit" class="btn btn-danger btn-sm" data-tooltip="Permanently delete saved YouTube cookies" title="Delete cookies">
         <span aria-hidden="true">🗑️</span> Delete saved cookies
       </button>
     </form>
@@ -189,7 +189,7 @@
     </div>
 
     <div class="form-actions-bar">
-      <button type="submit" class="btn">
+      <button type="submit" class="btn" data-tooltip="Save resolution and quality preferences" title="Save Quality Settings">
         <span aria-hidden="true">💾</span> Save Quality Settings
       </button>
     </div>
@@ -220,7 +220,7 @@
     </div>
 
     <div class="form-actions-bar">
-      <button type="submit" class="btn">
+      <button type="submit" class="btn" data-tooltip="Save default retention limits" title="Save Retention Rules">
         <span aria-hidden="true">💾</span> Save Retention Rules
       </button>
     </div>
@@ -229,7 +229,7 @@
   <div class="delete-cookies-wrapper">
     <form action="/api/settings/retention/run" method="POST">
       <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-      <button type="submit" class="btn btn-secondary btn-sm">
+      <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Run retention cleanup now across all channels" title="Run Retention Cleanup Now">
         <span aria-hidden="true">🧹</span> Run Retention Cleanup Now
       </button>
     </form>
@@ -268,14 +268,60 @@
     </div>
 
     <div class="form-actions-bar">
-      <button type="submit" class="btn">
+      <button type="submit" class="btn" data-tooltip="Save Shorts, Live, and SponsorBlock filters" title="Save Filters">
         <span aria-hidden="true">💾</span> Save Filters
       </button>
     </div>
   </form>
 </div>
 
-<!-- 6. Synchronization & Schedule -->
+<!-- 6. Import Subscriptions -->
+<details class="download-card import-card">
+  <summary data-tooltip="Import channel subscriptions from OPML or TubeArchivist" title="Import Subscriptions">
+    <span aria-hidden="true">📥</span> Import Subscriptions (TubeArchivist / OPML / JSON)
+  </summary>
+  <p class="text-muted-sm import-desc">
+    Import channel subscriptions from an OPML/XML export, TubeArchivist JSON file, or directly from a running TubeArchivist instance.
+  </p>
+  <form action="/api/subscriptions/import" method="POST" enctype="multipart/form-data" class="import-form">
+    <div class="form-grid form-grid-wide">
+      <div>
+        <label class="field-label" for="import-file">
+          Upload file (OPML XML or TubeArchivist JSON):
+        </label>
+        <input id="import-file" type="file" name="subscriptions_file" accept=".opml,.xml,.json" class="url-input input-sm" data-tooltip="Select an OPML or TubeArchivist JSON file" title="Subscriptions file">
+      </div>
+      <div>
+        <label class="field-label" for="import-library">
+          Target Library:
+        </label>
+        <select id="import-library" name="library" class="url-input input-sm" data-tooltip="Jellyfin library for imported subscriptions" title="Target Library">
+          {% for lib in library_options() %}
+          <option value="{{ lib.name }}" {% if current_lib == lib.name or (current_lib == 'all' and lib.name == 'default') %}selected{% endif %}>{{ lib.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="form-divider">
+      <span class="field-label">
+        Or fetch directly from a running TubeArchivist instance:
+      </span>
+      <div class="download-form-row">
+        <input type="url" name="ta_url" placeholder="http://tubearchivist:8000" class="url-input" data-tooltip="Base URL of your running TubeArchivist server" title="TubeArchivist URL">
+        <input type="password" name="ta_token" placeholder="TubeArchivist API Token" class="url-input" data-tooltip="API token from TubeArchivist settings" title="API Token">
+      </div>
+    </div>
+
+    <div class="form-actions-bar">
+      <button type="submit" class="btn" data-tooltip="Import subscriptions and begin syncing" title="Import Subscriptions">
+        <span aria-hidden="true">📥</span> Import Subscriptions
+      </button>
+    </div>
+  </form>
+</details>
+
+<!-- 7. Synchronization & Schedule -->
 <div class="download-card">
   <h3 class="card-heading">Synchronization & Schedule</h3>
   <p class="text-muted-sm">
@@ -299,7 +345,7 @@
     </div>
 
     <div class="form-actions-bar">
-      <button type="submit" class="btn">
+      <button type="submit" class="btn" data-tooltip="Save RSS polling interval" title="Save Schedule">
         <span aria-hidden="true">💾</span> Save Schedule
       </button>
     </div>
@@ -308,14 +354,14 @@
   <div class="delete-cookies-wrapper">
     <form action="/api/settings/poller/run" method="POST">
       <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-      <button type="submit" class="btn btn-secondary btn-sm">
+      <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Poll all active channel subscriptions immediately" title="Check for New Videos Now">
         <span aria-hidden="true">🔄</span> Check for New Videos Now
       </button>
     </form>
   </div>
 </div>
 
-<!-- 7. Jellyfin Integration -->
+<!-- 8. Jellyfin Integration -->
 <div class="download-card">
   <h3 class="card-heading">Jellyfin Integration</h3>
   <p class="text-muted-sm">
@@ -337,10 +383,10 @@
     </div>
 
     <div class="form-actions-bar">
-      <button type="submit" class="btn">
+      <button type="submit" class="btn" data-tooltip="Save Jellyfin server URL and API key" title="Save Jellyfin Settings">
         <span aria-hidden="true">💾</span> Save Jellyfin Settings
       </button>
-      <button type="button" class="btn btn-secondary" hx-post="/api/settings/jellyfin/test" hx-include="#jf-url, #jf-key" hx-target="#jellyfin-test-result" hx-swap="innerHTML">
+      <button type="button" class="btn btn-secondary" hx-post="/api/settings/jellyfin/test" hx-include="#jf-url, #jf-key" hx-target="#jellyfin-test-result" hx-swap="innerHTML" data-tooltip="Test connection to Jellyfin server" title="Test Connection">
         <span aria-hidden="true">🔌</span> Test Connection
       </button>
     </div>
@@ -349,7 +395,7 @@
   <div id="jellyfin-test-result"></div>
 </div>
 
-<!-- 8. System & Directories -->
+<!-- 9. System & Directories -->
 <div class="download-card">
   <h3 class="card-heading">System & Directories</h3>
   <div class="settings-info-grid">

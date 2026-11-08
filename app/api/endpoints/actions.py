@@ -314,11 +314,19 @@ async def add_subscription(
     library: str = Form("default"),
     retention_count: str | None = Form(None),
     retention_days: str | None = Form(None),
+    initial_download: str = Form("feed"),
+    return_to: str | None = Form(None),
+    channel_id_redirect: str | None = Form(None),
     db_conn=Depends(get_db),
 ) -> RedirectResponse:
     """Add a YouTube channel subscription (UC id, @handle or channel URL; name optional)."""
     channel_input = channel_input.strip()
     name = name.strip()
+
+    target_path = return_to or "/subscriptions"
+    failed_params: dict[str, Any] = {"msg": "sub_failed"}
+    if channel_id_redirect:
+        failed_params["channel_id"] = channel_id_redirect
 
     known_id = CHANNEL_URL_ID_RE.search(channel_input)
     if CHANNEL_ID_RE.match(channel_input) and name:
@@ -330,7 +338,7 @@ async def add_subscription(
             channel_id, resolved_name = await asyncio.to_thread(resolve_channel, channel_input)
         except Exception as exc:
             logger.warning("Could not resolve channel %r: %s", channel_input, exc)
-            return redirect_to("/subscriptions", library, msg="sub_failed")
+            return redirect_to(target_path, library, **failed_params)
         name = name or resolved_name or channel_id
 
     r_count = _positive_int_or_none(retention_count)
@@ -352,7 +360,7 @@ async def add_subscription(
             library = excluded.library,
             retention_count = excluded.retention_count,
             retention_days = excluded.retention_days,
-            auto_download = excluded.auto_download,
+            auto_download = 1,
             updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
         """,
         (
@@ -366,7 +374,41 @@ async def add_subscription(
             r_days,
         ),
     )
-    return redirect_to("/subscriptions", library, msg="sub_added")
+
+    # Initial sync based on initial_download setting
+    queued: list[str] = []
+    if initial_download != "channel_all":
+        limit: int | None = None
+        mark_skipped = False
+        if initial_download == "0":
+            limit = 0
+            mark_skipped = True
+        elif initial_download.isdigit():
+            limit = int(initial_download)
+            mark_skipped = True
+        elif initial_download == "feed":
+            limit = None
+            mark_skipped = False
+
+        queue = JobQueue()
+        poller = SubscriptionPoller(queue=queue, database=queue.db)
+        queued = await asyncio.to_thread(
+            poller.poll_channel,
+            channel_id,
+            limit=limit,
+            mark_skipped_below_limit=mark_skipped,
+        )
+
+    redirect_params: dict[str, Any] = {}
+    if channel_id_redirect:
+        redirect_params["channel_id"] = channel_id_redirect
+    if queued:
+        redirect_params["msg"] = "sub_added_queued"
+        redirect_params["n"] = len(queued)
+    else:
+        redirect_params["msg"] = "sub_added"
+
+    return redirect_to(target_path, library, **redirect_params)
 
 
 @router.post("/subscriptions/update")
@@ -499,9 +541,9 @@ async def import_subscriptions(
             )
         except Exception as exc:
             logger.warning("TubeArchivist import failed: %s", exc)
-            return redirect_to("/subscriptions", library, msg="ta_failed")
+            return redirect_to("/settings", library, msg="ta_failed")
     else:
-        return redirect_to("/subscriptions", library, msg="import_missing")
+        return redirect_to("/settings", library, msg="import_missing")
 
     imported = await asyncio.to_thread(migrator.import_channels, channels, library=library)
     return redirect_to("/subscriptions", library, msg="imported", n=imported)

@@ -448,3 +448,102 @@ def test_channel_rename_preserves_folder_continuity(
         row = cursor.fetchone()
         assert row["name"] == "New Channel Name"
         assert row["folder_name"] == "Old Folder Name"
+
+
+def test_subscription_poller_initial_download_limit_zero(
+    queue: JobQueue, temp_db: Database
+) -> None:
+    """Test initial download limit=0 marks all existing feed videos as skipped."""
+    with temp_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO channels (id, name, url, folder_name, library, auto_download)
+            VALUES (?, ?, ?, ?, ?, 1)
+            """,
+            ("UClimit0", "Limit 0 Channel", "https://youtube.com/@limit0", "Limit 0", "default"),
+        )
+
+    feed_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
+     <entry>
+      <yt:videoId>v1</yt:videoId>
+      <yt:channelId>UClimit0</yt:channelId>
+      <title>Video 1</title>
+      <published>2026-11-05T12:00:00Z</published>
+     </entry>
+     <entry>
+      <yt:videoId>v2</yt:videoId>
+      <yt:channelId>UClimit0</yt:channelId>
+      <title>Video 2</title>
+      <published>2026-11-06T12:00:00Z</published>
+     </entry>
+    </feed>
+    """
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, text=feed_xml))
+    )
+    poller = SubscriptionPoller(queue=queue, database=temp_db, client=client)
+
+    enqueued = poller.poll_channel("UClimit0", limit=0, mark_skipped_below_limit=True)
+    assert enqueued == []
+    assert queue.claim_next_job() is None
+
+    # Check skipped status in DB
+    with temp_db.connection() as conn:
+        rows = conn.execute(
+            "SELECT id, status FROM videos WHERE channel_id = 'UClimit0'"
+        ).fetchall()
+        assert len(rows) == 2
+        assert all(r["status"] == "skipped" for r in rows)
+
+    # Subsequent polling does not enqueue them
+    second_poll = poller.poll_channel("UClimit0")
+    assert second_poll == []
+
+
+def test_subscription_poller_initial_download_limit_n(queue: JobQueue, temp_db: Database) -> None:
+    """Test initial download limit=N enqueues top N and skips the rest."""
+    with temp_db.connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO channels (id, name, url, folder_name, library, auto_download)
+            VALUES (?, ?, ?, ?, ?, 1)
+            """,
+            ("UClimitN", "Limit N Channel", "https://youtube.com/@limitN", "Limit N", "default"),
+        )
+
+    feed_xml = """<?xml version="1.0" encoding="UTF-8"?>
+    <feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns="http://www.w3.org/2005/Atom">
+     <entry>
+      <yt:videoId>v_new</yt:videoId>
+      <yt:channelId>UClimitN</yt:channelId>
+      <title>Video New</title>
+      <published>2026-11-07T12:00:00Z</published>
+     </entry>
+     <entry>
+      <yt:videoId>v_old</yt:videoId>
+      <yt:channelId>UClimitN</yt:channelId>
+      <title>Video Old</title>
+      <published>2026-11-05T12:00:00Z</published>
+     </entry>
+    </feed>
+    """
+
+    client = httpx.Client(
+        transport=httpx.MockTransport(lambda req: httpx.Response(200, text=feed_xml))
+    )
+    poller = SubscriptionPoller(queue=queue, database=temp_db, client=client)
+
+    enqueued = poller.poll_channel("UClimitN", limit=1, mark_skipped_below_limit=True)
+    assert enqueued == ["v_new"]
+
+    job = queue.claim_next_job()
+    assert job is not None
+    assert job.payload["video_id"] == "v_new"
+
+    # v_old should be skipped
+    with temp_db.connection() as conn:
+        row = conn.execute("SELECT status FROM videos WHERE id = 'v_old'").fetchone()
+        assert row is not None
+        assert row["status"] == "skipped"

@@ -67,6 +67,7 @@ FLASH_MESSAGES = {
     "video_deleted": ("status", "Video deleted."),
     "video_delete_failed": ("alert", "Failed to delete video."),
     "sub_added": ("status", "Channel subscribed."),
+    "sub_added_queued": ("status", "Channel subscribed: {n} video(s) queued for download."),
     "sub_failed": ("alert", "Channel not found. Please check URL, @handle, or ID."),
     "sub_updated": ("status", "Subscription saved."),
     "sub_deleted": ("status", "Subscription removed."),

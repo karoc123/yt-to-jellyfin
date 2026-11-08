@@ -24,14 +24,18 @@
         required
         class="url-input"
         autocomplete="off"
+        data-tooltip="Enter channel URL, @handle, or channel ID (UC...)"
+        title="Channel input"
       >
       <input
         type="text"
         name="name"
         placeholder="Channel name (optional)"
         class="url-input"
+        data-tooltip="Optional custom channel display name"
+        title="Channel name"
       >
-      <button type="submit" class="btn">
+      <button type="submit" class="btn" data-tooltip="Add subscription and begin monitoring" title="Subscribe">
         <span aria-hidden="true">➕</span> Subscribe
       </button>
     </div>
@@ -39,68 +43,38 @@
     <div class="form-grid">
       <div>
         <label class="field-label" for="add-library">Target Library:</label>
-        <select id="add-library" name="library" class="url-input input-sm">
+        <select id="add-library" name="library" class="url-input input-sm" data-tooltip="Jellyfin library where channel videos are saved" title="Target Library">
           {% for lib in library_options() %}
           <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
           {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="field-label" for="add-initial-download">Download existing videos:</label>
+        <select id="add-initial-download" name="initial_download" class="url-input input-sm" data-tooltip="Choose how many existing videos to download immediately" title="Download existing videos">
+          <option value="feed" selected>All in RSS feed (~15 videos)</option>
+          <option value="10">Last 10 videos</option>
+          <option value="5">Last 5 videos</option>
+          <option value="3">Last 3 videos</option>
+          <option value="1">Last 1 video</option>
+          <option value="0">Only future videos (0 existing)</option>
+          <option value="channel_all" disabled>Entire channel [not implemented]</option>
         </select>
       </div>
 
       <div>
         <label class="field-label" for="add-retention-count">Max. Episodes (0 = unlimited):</label>
-        <input id="add-retention-count" type="number" name="retention_count" placeholder="e.g. 10" min="0" class="url-input input-sm">
+        <input id="add-retention-count" type="number" name="retention_count" placeholder="e.g. 10" min="0" class="url-input input-sm" data-tooltip="Retain at most this many unpinned videos (0 = unlimited)" title="Max Episodes">
       </div>
 
       <div>
         <label class="field-label" for="add-retention-days">TTL Days (0 = unlimited):</label>
-        <input id="add-retention-days" type="number" name="retention_days" placeholder="e.g. 30" min="0" class="url-input input-sm">
+        <input id="add-retention-days" type="number" name="retention_days" placeholder="e.g. 30" min="0" class="url-input input-sm" data-tooltip="Delete unpinned videos older than this many days (0 = unlimited)" title="TTL Days">
       </div>
     </div>
   </form>
 </div>
-
-<!-- Import Subscriptions Card -->
-<details class="download-card import-card">
-  <summary>
-    <span aria-hidden="true">📥</span> Import Subscriptions (TubeArchivist / OPML / JSON)
-  </summary>
-  <form action="/api/subscriptions/import" method="POST" enctype="multipart/form-data" class="import-form">
-    <div class="form-grid form-grid-wide">
-      <div>
-        <label class="field-label" for="import-file">
-          Upload file (OPML XML or TubeArchivist JSON):
-        </label>
-        <input id="import-file" type="file" name="subscriptions_file" accept=".opml,.xml,.json" class="url-input input-sm">
-      </div>
-      <div>
-        <label class="field-label" for="import-library">
-          Target Library:
-        </label>
-        <select id="import-library" name="library" class="url-input input-sm">
-          {% for lib in library_options() %}
-          <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <div class="form-divider">
-      <span class="field-label">
-        Or fetch directly from a running TubeArchivist instance:
-      </span>
-      <div class="download-form-row">
-        <input type="url" name="ta_url" placeholder="http://tubearchivist:8000" class="url-input">
-        <input type="password" name="ta_token" placeholder="TubeArchivist API Token" class="url-input">
-      </div>
-    </div>
-
-    <div class="form-actions">
-      <button type="submit" class="btn">
-        <span aria-hidden="true">📥</span> Import Subscriptions
-      </button>
-    </div>
-  </form>
-</details>
 
 <!-- Subscribed Channels List -->
 <section>
@@ -108,7 +82,7 @@
     <h3 class="section-title">Active Subscriptions ({{ channels|length }})</h3>
     <form action="/api/subscriptions/sync-all" method="POST">
       {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-      <button type="submit" class="btn btn-secondary btn-sm">
+      <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Check RSS feeds for all active subscriptions immediately" title="Sync All Now">
         <span aria-hidden="true">🔄</span> Sync All Now
       </button>
     </form>
@@ -122,7 +96,7 @@
           <h4 class="sub-name">{{ ch.name }}</h4>
           <span class="text-muted-xs">ID: {{ ch.id }}</span>
         </div>
-        <span class="badge badge-lib">{{ ch.library or 'default' }}</span>
+        <span class="badge badge-lib" data-tooltip="Target library" title="Library">{{ ch.library or 'default' }}</span>
       </div>
 
       <div class="sub-stats">
@@ -132,7 +106,7 @@
       </div>
 
       <details class="sub-edit">
-        <summary>Edit</summary>
+        <summary data-tooltip="Edit subscription settings and retention limits" title="Edit subscription">Edit</summary>
         <form action="/api/subscriptions/update" method="POST" class="sub-edit-form">
           <input type="hidden" name="channel_id" value="{{ ch.id }}">
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
@@ -157,12 +131,12 @@
         <form action="/api/subscriptions/sync" method="POST" class="action-main">
           <input type="hidden" name="channel_id" value="{{ ch.id }}">
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          <button type="submit" class="btn btn-secondary btn-sm btn-block">
+          <button type="submit" class="btn btn-secondary btn-sm btn-block" data-tooltip="Check RSS feed for new videos now" title="Sync channel">
             <span aria-hidden="true">🔄</span> Sync
           </button>
         </form>
 
-        <button type="button" class="btn btn-danger btn-sm" aria-label="Unsubscribe or delete" title="Unsubscribe or delete" onclick="document.getElementById('del-modal-{{ ch.id }}').showModal()">
+        <button type="button" class="btn btn-danger btn-sm" aria-label="Unsubscribe or delete" title="Unsubscribe or delete" data-tooltip="Unsubscribe or delete channel" onclick="document.getElementById('del-modal-{{ ch.id }}').showModal()">
           <span aria-hidden="true">🗑️</span>
         </button>
 
@@ -232,7 +206,7 @@
     </div>
     {% else %}
     <div class="empty-state">
-      No subscriptions found.
+      No subscriptions found. You can subscribe above or import subscriptions under <a href="/settings{% if current_lib and current_lib != 'all' %}?lib={{ current_lib }}{% endif %}">Settings</a>.
     </div>
     {% endfor %}
   </div>

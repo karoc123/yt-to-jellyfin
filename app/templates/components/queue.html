@@ -22,7 +22,7 @@
           <span class="card-title" title="{{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}">
             {{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}
           </span>
-          <span class="badge badge-status-{{ job.status }}">{{ job_status_labels.get(job.status, job.status) }}</span>
+          <span class="badge badge-status-{{ job.status }}" data-tooltip="Job status: {{ job_status_labels.get(job.status, job.status) }}" title="{{ job_status_labels.get(job.status, job.status) }}">{{ job_status_labels.get(job.status, job.status) }}</span>
         </div>
 
         {% if job.payload.channel_name or (job.payload.title and job.payload.url) %}
@@ -33,12 +33,12 @@
           <span></span>
           {% endif %}
           {% if job.payload.title and job.payload.url %}
-          <a href="{{ job.payload.url }}" target="_blank" rel="noopener noreferrer" class="queue-link" title="{{ job.payload.url }}">Source ↗</a>
+          <a href="{{ job.payload.url }}" target="_blank" rel="noopener noreferrer" class="queue-link" data-tooltip="Open original YouTube link" title="{{ job.payload.url }}">Source ↗</a>
           {% endif %}
         </div>
         {% endif %}
 
-        <div class="progress-bar-container">
+        <div class="progress-bar-container" data-tooltip="{{ job.progress }}% completed" title="{{ job.progress }}%">
           <div class="progress-bar-fill" style="width: {{ job.progress }}%;"></div>
         </div>
 
@@ -58,9 +58,9 @@
               class="form-actions">
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
           {% if job_action == 'retry' %}
-          <button type="submit" class="btn btn-secondary btn-sm">Retry</button>
+          <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Retry this download job" title="Retry download">Retry</button>
           {% else %}
-          <button type="submit" class="btn btn-danger btn-sm">Cancel</button>
+          <button type="submit" class="btn btn-danger btn-sm" data-tooltip="Cancel this pending job" title="Cancel download">Cancel</button>
           {% endif %}
         </form>
         {% endif %}

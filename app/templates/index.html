@@ -14,15 +14,17 @@
         required
         class="url-input"
         autocomplete="off"
+        data-tooltip="Paste YouTube video, Shorts, playlist, or channel URL"
+        title="Paste YouTube video, Shorts, playlist, or channel URL"
       >
       <input type="hidden" name="library" value="{{ current_lib or 'default' }}">
-      <button type="submit" class="btn">
+      <button type="submit" class="btn" data-tooltip="Queue download job immediately" title="Queue download job immediately">
         <span aria-hidden="true">⬇️</span> Download
       </button>
     </div>
 
     <div>
-      <button type="button" class="options-toggle" onclick="toggleAdvancedOptions()">
+      <button type="button" class="options-toggle" onclick="toggleAdvancedOptions()" data-tooltip="Configure library destination, max resolution, and SponsorBlock" title="Configure library destination, max resolution, and SponsorBlock">
         <span aria-hidden="true">⚙️</span> Additional options (resolution, SponsorBlock, target library)
       </button>
     </div>
@@ -30,7 +32,7 @@
     <div class="advanced-options" id="advanced-options">
       <div>
         <label class="field-label" for="dl-target-library">Target Library:</label>
-        <select id="dl-target-library" name="target_library" class="url-input input-sm">
+        <select id="dl-target-library" name="target_library" class="url-input input-sm" data-tooltip="Jellyfin media library folder to save files into" title="Jellyfin media library folder to save files into">
           {% for lib in library_options() %}
           <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
           {% endfor %}
@@ -39,7 +41,7 @@
 
       <div>
         <label class="field-label" for="dl-max-height">Max. Resolution:</label>
-        <select id="dl-max-height" name="max_height" class="url-input input-sm">
+        <select id="dl-max-height" name="max_height" class="url-input input-sm" data-tooltip="Cap video resolution to save bandwidth and disk space" title="Cap video resolution to save bandwidth and disk space">
           <option value="">Best Quality (Original)</option>
           <option value="1080">1080p (Full HD)</option>
           <option value="720">720p (HD)</option>
@@ -49,7 +51,7 @@
 
       <div>
         <span class="field-label">SponsorBlock:</span>
-        <label class="checkbox-label">
+        <label class="checkbox-label" data-tooltip="Automatically skip sponsor and intro segments" title="Automatically skip sponsor and intro segments">
           <input type="checkbox" name="sponsorblock" value="1" checked> Automatically remove sponsored segments
         </label>
       </div>

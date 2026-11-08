@@ -8,27 +8,44 @@
     <h2 class="page-title">Library Overview</h2>
     <p class="text-muted-sm">
       {% if active_channel %}
-        <a href="/browser{% if current_lib and current_lib != 'all' %}?lib={{ current_lib }}{% endif %}" class="back-link">&larr; Back to all channels</a> &bull; Channel: <strong>{{ active_channel.name }}</strong>
+        <a href="/browser{% if current_lib and current_lib != 'all' %}?lib={{ current_lib }}{% endif %}" class="back-link" data-tooltip="Back to all channels" title="Back to all channels">&larr; Back to all channels</a> &bull; Channel: <strong>{{ active_channel.name }}</strong>
+        {% if active_channel.auto_download %}
+        <span class="badge badge-subscribed" data-tooltip="Channel is subscribed for automatic downloads" title="Subscribed">Subscribed</span>
+        {% else %}
+        <span class="badge badge-unsubscribed" data-tooltip="Channel is not subscribed (archived videos only)" title="Not Subscribed">Not Subscribed</span>
+        {% endif %}
       {% else %}
         Channels and videos organized by library
       {% endif %}
     </p>
   </div>
 
-  {% if active_channel and videos %}
   <div class="btn-group">
-    <button type="button" class="btn btn-secondary" onclick="selectAllVideos(false)">Select all</button>
-    <button type="button" class="btn btn-secondary" onclick="selectAllVideos(true)">Only unpinned</button>
-    <button type="button" class="btn btn-secondary" onclick="deselectAllVideos()">Deselect all</button>
+    {% if active_channel %}
+      {% if not active_channel.auto_download %}
+      <button type="button" class="btn btn-sm" onclick="document.getElementById('subscribe-modal').showModal()" data-tooltip="Subscribe to this channel to automatically download new videos" title="Subscribe to channel">
+        <span aria-hidden="true">➕</span> Subscribe Channel
+      </button>
+      {% else %}
+      <a href="/subscriptions{% if current_lib and current_lib != 'all' %}?lib={{ current_lib }}{% endif %}" class="btn btn-secondary btn-sm" data-tooltip="Manage subscription rules and retention settings" title="Manage subscription">
+        <span aria-hidden="true">⚙️</span> Manage Subscription
+      </a>
+      {% endif %}
+
+      {% if videos %}
+      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllVideos(false)" data-tooltip="Select all visible videos" title="Select all visible videos">Select all</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="selectAllVideos(true)" data-tooltip="Select only unpinned videos" title="Select unpinned videos">Only unpinned</button>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="deselectAllVideos()" data-tooltip="Clear video selection" title="Deselect all">Deselect all</button>
+      {% endif %}
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
 {% if not active_channel %}
 <!-- Two-Tier Navigation: Channel Grid -->
 <div class="grid">
   {% for ch in channels %}
-  <a href="/browser?channel_id={{ ch.id }}{% if current_lib and current_lib != 'all' %}&lib={{ current_lib }}{% endif %}" class="card card-link">
+  <a href="/browser?channel_id={{ ch.id }}{% if current_lib and current_lib != 'all' %}&lib={{ current_lib }}{% endif %}" class="card card-link" data-tooltip="Browse channel videos" title="{{ ch.name }}">
     <div class="channel-poster">
       {% if ch.has_poster %}
       <img src="/api/media/poster?channel_id={{ ch.id }}" alt="{{ ch.name }}" loading="lazy">
@@ -40,7 +57,14 @@
       <span class="card-title">{{ ch.name }}</span>
       <div class="card-meta">
         <span>{{ ch.video_count }} Video(s) &middot; {{ ch.total_size|filesize }}</span>
-        <span class="badge badge-lib">{{ ch.library or 'default' }}</span>
+        <div>
+          {% if ch.auto_download %}
+          <span class="badge badge-subscribed" data-tooltip="Channel is actively subscribed" title="Subscribed">Subscribed</span>
+          {% else %}
+          <span class="badge badge-unsubscribed" data-tooltip="Archived videos only (not subscribed)" title="Archived only">Archived</span>
+          {% endif %}
+          <span class="badge badge-lib" data-tooltip="Target library" title="Library">{{ ch.library or 'default' }}</span>
+        </div>
       </div>
     </div>
   </a>
@@ -56,8 +80,8 @@
 <form action="/browser" method="GET" class="search-form" role="search">
   <input type="hidden" name="channel_id" value="{{ active_channel.id }}">
   {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-  <input type="search" name="q" value="{{ q }}" placeholder="Search titles..." aria-label="Search titles" class="url-input input-sm">
-  <button type="submit" class="btn btn-secondary btn-sm">Search</button>
+  <input type="search" name="q" value="{{ q }}" placeholder="Search titles..." aria-label="Search titles" class="url-input input-sm" data-tooltip="Search videos in this channel by title" title="Search titles">
+  <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Run search" title="Search">Search</button>
 </form>
 
 <div class="grid">
@@ -72,7 +96,7 @@
       </div>
       {% endif %}
 
-      <label class="video-select">
+      <label class="video-select" data-tooltip="Select video for bulk operations" title="Select video">
         <input
           type="checkbox"
           class="video-checkbox"
@@ -84,7 +108,7 @@
       </label>
 
       {% if v.is_pinned %}
-      <span class="badge badge-pinned badge-corner"><span aria-hidden="true">📌</span> Pinned</span>
+      <span class="badge badge-pinned badge-corner" data-tooltip="Pinned: protected from automatic retention cleanup" title="Pinned"><span aria-hidden="true">📌</span> Pinned</span>
       {% endif %}
     </div>
 
@@ -100,7 +124,7 @@
           <input type="hidden" name="video_id" value="{{ v.id }}">
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
           <input type="hidden" name="is_pinned" value="{% if v.is_pinned %}0{% else %}1{% endif %}">
-          <button type="submit" class="btn btn-secondary btn-sm btn-block">
+          <button type="submit" class="btn btn-secondary btn-sm btn-block" data-tooltip="{% if v.is_pinned %}Unpin video to allow retention cleanup{% else %}Pin video to prevent retention deletion{% endif %}" title="{% if v.is_pinned %}Unpin video{% else %}Pin video{% endif %}">
             {% if v.is_pinned %}Unpin{% else %}<span aria-hidden="true">📌</span> Pin{% endif %}
           </button>
         </form>
@@ -108,7 +132,7 @@
         <form action="/api/videos/delete" method="POST" onsubmit="return confirm('Really delete video?');">
           <input type="hidden" name="video_id" value="{{ v.id }}">
           {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          <button type="submit" class="btn btn-danger btn-sm" aria-label="Delete video" title="Delete video">
+          <button type="submit" class="btn btn-danger btn-sm" aria-label="Delete video" title="Delete video" data-tooltip="Permanently delete video from library and disk">
             <span aria-hidden="true">🗑️</span>
           </button>
         </form>
@@ -124,9 +148,9 @@
 
 {% if pagination.pages > 1 %}
 <nav class="pagination" aria-label="Pages">
-  {% if pagination.prev_url %}<a href="{{ pagination.prev_url }}" class="btn btn-secondary btn-sm" rel="prev">&larr; Previous</a>{% endif %}
+  {% if pagination.prev_url %}<a href="{{ pagination.prev_url }}" class="btn btn-secondary btn-sm" rel="prev" data-tooltip="Go to previous page" title="Previous page">&larr; Previous</a>{% endif %}
   <span class="text-muted-sm">Page {{ pagination.page }} of {{ pagination.pages }} ({{ pagination.total }} videos)</span>
-  {% if pagination.next_url %}<a href="{{ pagination.next_url }}" class="btn btn-secondary btn-sm" rel="next">Next &rarr;</a>{% endif %}
+  {% if pagination.next_url %}<a href="{{ pagination.next_url }}" class="btn btn-secondary btn-sm" rel="next" data-tooltip="Go to next page" title="Next page">Next &rarr;</a>{% endif %}
 </nav>
 {% endif %}
 
@@ -134,10 +158,70 @@
 <div id="bulk-bar" class="bulk-bar" hidden>
   <span id="bulk-count" class="bulk-count" aria-live="polite">0 videos selected</span>
   <div class="btn-group">
-    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(true)"><span aria-hidden="true">📌</span> Pin</button>
-    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(false)">Unpin</button>
-    <button type="button" class="btn btn-danger" onclick="bulkDeleteVideos()"><span aria-hidden="true">🗑️</span> Delete</button>
+    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(true)" data-tooltip="Pin selected videos against retention deletion" title="Pin selected"><span aria-hidden="true">📌</span> Pin</button>
+    <button type="button" class="btn btn-secondary" onclick="bulkPinVideos(false)" data-tooltip="Unpin selected videos" title="Unpin selected">Unpin</button>
+    <button type="button" class="btn btn-danger" onclick="bulkDeleteVideos()" data-tooltip="Permanently delete selected videos from library and disk" title="Delete selected"><span aria-hidden="true">🗑️</span> Delete</button>
   </div>
 </div>
+
+{% if not active_channel.auto_download %}
+<!-- Retrospective Subscription Modal -->
+<dialog id="subscribe-modal" class="modal-dialog">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 class="card-heading">Subscribe to Channel</h3>
+      <p class="text-muted-sm"><strong>{{ active_channel.name }}</strong></p>
+    </div>
+
+    <form action="/api/subscriptions" method="POST" class="settings-form">
+      <input type="hidden" name="channel_input" value="{{ active_channel.id }}">
+      <input type="hidden" name="name" value="{{ active_channel.name }}">
+      <input type="hidden" name="return_to" value="/browser">
+      <input type="hidden" name="channel_id_redirect" value="{{ active_channel.id }}">
+      {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
+
+      <div class="form-group">
+        <label class="field-label" for="sub-modal-lib">Target Library:</label>
+        <select id="sub-modal-lib" name="library" class="url-input input-sm" data-tooltip="Select destination Jellyfin media library" title="Target Library">
+          {% for lib in library_options() %}
+          <option value="{{ lib.name }}" {% if (active_channel.library or current_lib) == lib.name %}selected{% endif %}>{{ lib.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="field-label" for="sub-modal-initial">Download existing videos:</label>
+        <select id="sub-modal-initial" name="initial_download" class="url-input input-sm" data-tooltip="Choose how many existing videos to download immediately" title="Download existing videos">
+          <option value="feed" selected>All in RSS feed (~15 videos)</option>
+          <option value="10">Last 10 videos</option>
+          <option value="5">Last 5 videos</option>
+          <option value="3">Last 3 videos</option>
+          <option value="1">Last 1 video</option>
+          <option value="0">Only future videos (0 existing)</option>
+          <option value="channel_all" disabled>Entire channel [not implemented]</option>
+        </select>
+      </div>
+
+      <div class="form-grid">
+        <div>
+          <label class="field-label" for="sub-modal-count">Max. Episodes (0 = unlimited):</label>
+          <input id="sub-modal-count" type="number" name="retention_count" min="0" value="{{ active_channel.retention_count or 0 }}" class="url-input input-sm" data-tooltip="Retain at most this many unpinned videos (0 = unlimited)" title="Max Episodes">
+        </div>
+        <div>
+          <label class="field-label" for="sub-modal-days">TTL Days (0 = unlimited):</label>
+          <input id="sub-modal-days" type="number" name="retention_days" min="0" value="{{ active_channel.retention_days or 0 }}" class="url-input input-sm" data-tooltip="Delete unpinned videos older than this many days (0 = unlimited)" title="TTL Days">
+        </div>
+      </div>
+
+      <div class="form-actions-bar">
+        <button type="submit" class="btn btn-sm" data-tooltip="Activate subscription and download selected videos" title="Subscribe">
+          <span aria-hidden="true">➕</span> Subscribe
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="this.closest('dialog').close()">Cancel</button>
+      </div>
+    </form>
+  </div>
+</dialog>
+{% endif %}
 {% endif %}
 {% endblock %}

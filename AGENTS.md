@@ -23,6 +23,8 @@ It is built for families and self-hosters who want hassle-free downloads, clean 
 5. **Minimal Documentation & Pragmatism (Less is More):**
    * Write Markdown only where strictly necessary — less is often more.
    * Avoid creating unnecessary `.md` files or sprawling prose; keep documentation lean, actionable, user-centric, and grounded without corporate marketing fluff.
+6. **English UI Text:**
+   * All user-facing UI text, buttons, labels, notifications, and tooltips must always be in English.
 
 ---
 
