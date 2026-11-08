@@ -12,6 +12,14 @@ services:
       - DATABASE_PATH=/data/app.db
       - MEDIA_PATH=/media
       - TZ=Europe/Berlin
+      # Optional: Netscape cookies.txt path for age/member-restricted videos
+      # - COOKIES_PATH=/cookies/cookies.txt
+      # Optional: TubeArchivist-style format sort (e.g. res:1080,fps,codec:h264)
+      # - FORMAT_SORT=res:1080,fps
+      # Optional: Throttled download rate in bytes/sec (e.g. 5242880 for 5MB/s)
+      # - THROTTLED_RATE_BYTES=5242880
     volumes:
       - ./data:/data
       - ./media:/media
+      # Optional: Mount cookies file as read-only
+      # - ./cookies.txt:/cookies/cookies.txt:ro
