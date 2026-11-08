@@ -70,7 +70,7 @@ async def view_browser(
         cursor.execute(
             """
             SELECT * FROM videos
-            WHERE channel_id = ?
+            WHERE channel_id = ? AND status = 'completed'
             ORDER BY published_at DESC, created_at DESC
             """,
             (channel_id,),
@@ -83,7 +83,7 @@ async def view_browser(
                 """
                 SELECT c.*, COUNT(v.id) AS video_count
                 FROM channels c
-                LEFT JOIN videos v ON v.channel_id = c.id
+                LEFT JOIN videos v ON v.channel_id = c.id AND v.status = 'completed'
                 WHERE c.library = ?
                 GROUP BY c.id
                 ORDER BY c.name ASC
@@ -95,7 +95,7 @@ async def view_browser(
                 """
                 SELECT c.*, COUNT(v.id) AS video_count
                 FROM channels c
-                LEFT JOIN videos v ON v.channel_id = c.id
+                LEFT JOIN videos v ON v.channel_id = c.id AND v.status = 'completed'
                 GROUP BY c.id
                 ORDER BY c.name ASC
                 """

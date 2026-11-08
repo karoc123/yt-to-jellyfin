@@ -100,11 +100,13 @@ def test_video_pinning(engine: RetentionEngine, temp_db: Database) -> None:
     result_unpinned = engine.delete_video("vid_pinned", force=False)
     assert result_unpinned.success is True
 
-    # Record should be gone from DB
+    # Record stays as tombstone without file references
     with temp_db.connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM videos WHERE id = ?", ("vid_pinned",))
-        assert cursor.fetchone() is None
+        cursor.execute("SELECT status, file_path FROM videos WHERE id = ?", ("vid_pinned",))
+        row = cursor.fetchone()
+        assert row["status"] == "deleted"
+        assert row["file_path"] is None
 
 
 def test_retention_ttl_rules(engine: RetentionEngine, temp_db: Database, tmp_path: Path) -> None:
@@ -191,7 +193,10 @@ def test_retention_count_rules(engine: RetentionEngine, temp_db: Database) -> No
 
     with temp_db.connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM videos WHERE channel_id = 'UCcount' ORDER BY id")
+        cursor.execute(
+            "SELECT id FROM videos WHERE channel_id = 'UCcount' AND status = 'completed' "
+            "ORDER BY id"
+        )
         remaining = [r["id"] for r in cursor.fetchall()]
         assert remaining == ["v3", "v4"]
 

@@ -164,7 +164,7 @@ def test_bulk_pin_and_delete_endpoints(test_client: TestClient, tmp_path: Path) 
 
     with test_db.connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM videos")
+        cursor.execute("SELECT COUNT(*) FROM videos WHERE status = 'completed'")
         assert cursor.fetchone()[0] == 0
 
 

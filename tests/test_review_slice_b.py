@@ -98,7 +98,6 @@ def _insert_video(
 # --- B1: deleted videos must not be re-downloaded by the poller ---------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="B1: poller re-enqueues manually deleted video")
 def test_b1_manually_deleted_video_is_not_repolled(
     queue: JobQueue, temp_db: Database, tmp_path: Path
 ) -> None:
@@ -113,7 +112,6 @@ def test_b1_manually_deleted_video_is_not_repolled(
     assert poller.poll_channel(CHANNEL_ID) == []
 
 
-@pytest.mark.xfail(strict=True, reason="B1: poller re-enqueues video removed by retention TTL")
 def test_b1_retention_deleted_video_is_not_repolled(queue: JobQueue, temp_db: Database) -> None:
     now = datetime.now(UTC)
     with temp_db.connection() as conn:

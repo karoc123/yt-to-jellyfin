@@ -56,8 +56,9 @@ class RetentionEngine:
             return cursor.rowcount > 0
 
     def delete_video(self, video_id: str, force: bool = False) -> DeletionResult:
-        """Permanently delete a video from filesystem and SQLite database.
+        """Delete a video's files and keep its row as tombstone (`status='deleted'`).
 
+        The tombstone stops the RSS poller from downloading the video again.
         If video is pinned and force=False, deletion will be refused.
         """
         with self.db.connection() as conn:
@@ -65,7 +66,7 @@ class RetentionEngine:
             cursor.execute(
                 """
                 SELECT id, channel_id, title, file_path, nfo_path, thumbnail_path, is_pinned
-                FROM videos WHERE id = ?
+                FROM videos WHERE id = ? AND status != 'deleted'
                 """,
                 (video_id,),
             )
@@ -99,8 +100,16 @@ class RetentionEngine:
                 thumbnail_path=row["thumbnail_path"],
             )
 
-            # 2. Remove video record from database
-            cursor.execute("DELETE FROM videos WHERE id = ?", (video_id,))
+            # 2. Keep the row as tombstone without file references
+            cursor.execute(
+                """
+                UPDATE videos
+                SET status = 'deleted', file_path = NULL, nfo_path = NULL,
+                    thumbnail_path = NULL, file_size = 0, updated_at = ?
+                WHERE id = ?
+                """,
+                (datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), video_id),
+            )
 
             logger.info(
                 "Successfully deleted video %s and %d artifact(s)",
@@ -157,7 +166,7 @@ class RetentionEngine:
                 """
                 SELECT id, title, published_at, is_pinned
                 FROM videos
-                WHERE channel_id = ? AND is_pinned = 0
+                WHERE channel_id = ? AND is_pinned = 0 AND status = 'completed'
                 ORDER BY published_at DESC, created_at DESC
                 """,
                 (channel_id,),
