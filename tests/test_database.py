@@ -35,13 +35,13 @@ def test_migrations_application_and_idempotency(temp_db: Database) -> None:
     assert temp_db.get_user_version() == 0
 
     applied = temp_db.run_migrations()
-    assert applied == [1]
-    assert temp_db.get_user_version() == 1
+    assert applied == [1, 2]
+    assert temp_db.get_user_version() == 2
 
     # Second run should apply nothing
     applied_again = temp_db.run_migrations()
     assert applied_again == []
-    assert temp_db.get_user_version() == 1
+    assert temp_db.get_user_version() == 2
 
 
 def test_schema_tables_and_constraints(temp_db: Database) -> None:
@@ -49,7 +49,7 @@ def test_schema_tables_and_constraints(temp_db: Database) -> None:
     temp_db.run_migrations()
 
     with temp_db.connection() as conn:
-        # Insert channel
+        # Insert channel with default library
         conn.execute(
             """
             INSERT INTO channels (id, name, url, folder_name, retention_days, retention_count)
@@ -57,6 +57,21 @@ def test_schema_tables_and_constraints(temp_db: Database) -> None:
             """,
             ("UC12345", "Test Channel", "https://youtube.com/@test", "Test Channel", 30, 10),
         )
+
+        cursor = conn.cursor()
+        cursor.execute("SELECT library FROM channels WHERE id = ?", ("UC12345",))
+        assert cursor.fetchone()["library"] == "default"
+
+        # Insert channel with custom library
+        conn.execute(
+            """
+            INSERT INTO channels (id, name, url, folder_name, library)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            ("UCkids", "Kids Channel", "https://youtube.com/@kids", "Kids Channel", "kids"),
+        )
+        cursor.execute("SELECT library FROM channels WHERE id = ?", ("UCkids",))
+        assert cursor.fetchone()["library"] == "kids"
 
         # Insert video
         conn.execute(

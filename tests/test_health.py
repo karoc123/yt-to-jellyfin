@@ -28,4 +28,4 @@ def test_app_lifespan_migration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
 
     with TestClient(app):
         # Lifespan should have run migrations on test_db
-        assert test_db.get_user_version() == 1
+        assert test_db.get_user_version() >= 2
