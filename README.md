@@ -112,17 +112,19 @@ For detailed screenshots and multi-library parental control setups, see [docs/je
 
 ## 📦 TubeArchivist Migration
 
-Migrate existing TubeArchivist video archives directly into `yt-to-jellyfin`:
+Migrate existing TubeArchivist video archives and subscriptions directly into `yt-to-jellyfin`:
 
 ```bash
-# Preview migration (dry run)
+# Preview video archive migration (dry run)
 uv run migrate-tubearchivist --source /path/to/tubearchivist/youtube --dest /media --dry-run
 
-# Execute instant hardlink migration (no duplicated disk space)
-uv run migrate-tubearchivist --source /path/to/tubearchivist/youtube --dest /media --mode hardlink
+# Migrate media and import subscriptions file (JSON or OPML)
+uv run migrate-tubearchivist --source /path/to/archive --dest /media --subscriptions /path/to/subscriptions.json --mode hardlink
 
-# Or run inside Docker container
-docker compose exec yt-to-jellyfin migrate-tubearchivist --source /archive --dest /media --mode copy
+# Or import subscriptions directly from running TubeArchivist instance:
+uv run migrate-tubearchivist --ta-url http://tubearchivist:8000 --ta-token YOUR_API_TOKEN
+
+# Or upload subscriptions.json / OPML in the Web UI under /subscriptions
 ```
 
 For full CLI documentation and options, see [docs/migration_tubearchivist.md](docs/migration_tubearchivist.md).

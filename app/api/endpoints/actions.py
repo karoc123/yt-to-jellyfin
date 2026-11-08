@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel
 
 from app.db import db, get_db
+from app.migration.subscriptions import SubscriptionsMigrator
 from app.retention import retention_engine
 from app.worker.poller import SubscriptionPoller
 from app.worker.queue import JobQueue
@@ -190,3 +191,28 @@ async def delete_subscription(
     cursor = db_conn.cursor()
     cursor.execute("DELETE FROM channels WHERE id = ?", (channel_id,))
     return RedirectResponse("/subscriptions", status_code=303)
+
+
+@router.post("/subscriptions/import")
+async def import_subscriptions(
+    subscriptions_file: UploadFile | None = File(None),
+    ta_url: str | None = Form(None),
+    ta_token: str | None = Form(None),
+    library: str = Form("default"),
+    db_conn=Depends(get_db),
+) -> RedirectResponse:
+    """Import subscriptions from OPML/JSON file or TubeArchivist API."""
+    migrator = SubscriptionsMigrator(database=db)
+    if subscriptions_file and subscriptions_file.filename:
+        content = await subscriptions_file.read()
+        stripped = content.strip()
+        if stripped.startswith(b"{") or stripped.startswith(b"["):
+            channels = migrator.parse_json(content)
+        else:
+            channels = migrator.parse_opml(content)
+        migrator.import_channels(channels, library=library)
+    elif ta_url and ta_token:
+        channels = migrator.fetch_from_tubearchivist_api(ta_url, ta_token)
+        migrator.import_channels(channels, library=library)
+
+    return RedirectResponse(f"/subscriptions?lib={library}", status_code=303)

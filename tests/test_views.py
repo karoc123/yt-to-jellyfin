@@ -202,3 +202,35 @@ def test_subscriptions_flow(test_client: TestClient, tmp_path: Path) -> None:
         cursor = conn.cursor()
         cursor.execute("SELECT COUNT(*) FROM channels WHERE id = 'UCnewsub'")
         assert cursor.fetchone()[0] == 0
+
+
+def test_subscriptions_import_endpoint(test_client: TestClient, tmp_path: Path) -> None:
+    """Test importing subscriptions via file upload."""
+    opml_content = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <opml version="1.0">
+      <body>
+        <outline text="Uploaded Channel" title="Uploaded Channel"
+                 xmlUrl="https://www.youtube.com/feeds/videos.xml?channel_id=UCimported_upload"
+                 htmlUrl="https://www.youtube.com/channel/UCimported_upload"/>
+      </body>
+    </opml>"""
+
+    files = {"subscriptions_file": ("subs.opml", opml_content, "application/xml")}
+    res = test_client.post(
+        "/api/subscriptions/import",
+        files=files,
+        data={"library": "kids"},
+        follow_redirects=False,
+    )
+    assert res.status_code == 303
+    assert "?lib=kids" in res.headers["location"]
+
+    test_db = Database(tmp_path / "web_test.db")
+    with test_db.connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM channels WHERE id = 'UCimported_upload'")
+        row = cursor.fetchone()
+        assert row is not None
+        assert row["name"] == "Uploaded Channel"
+        assert row["library"] == "kids"
+        assert row["auto_download"] == 1

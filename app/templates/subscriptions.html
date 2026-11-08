@@ -61,6 +61,50 @@
   </form>
 </div>
 
+<!-- Import Subscriptions Card -->
+<details class="download-card" style="margin-bottom: 24px; cursor: pointer;">
+  <summary style="font-size: 1.05rem; font-weight: 600; color: var(--primary);">
+    📥 Abonnements importieren (TubeArchivist / OPML / JSON)
+  </summary>
+  <form action="/api/subscriptions/import" method="POST" enctype="multipart/form-data" style="margin-top: 14px; display: flex; flex-direction: column; gap: 12px; cursor: default;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;">
+      <div>
+        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">
+          Datei hochladen (OPML XML oder TubeArchivist JSON):
+        </label>
+        <input type="file" name="subscriptions_file" accept=".opml,.xml,.json" class="url-input" style="padding: 6px;">
+      </div>
+      <div>
+        <label style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px;">
+          Ziel-Bibliothek:
+        </label>
+        <select name="library" class="url-input" style="padding: 6px;">
+          <option value="default" {% if current_lib == 'default' %}selected{% endif %}>Standard</option>
+          <option value="kids" {% if current_lib == 'kids' %}selected{% endif %}>Kids</option>
+          <option value="dokus" {% if current_lib == 'dokus' %}selected{% endif %}>Dokus</option>
+          <option value="tech" {% if current_lib == 'tech' %}selected{% endif %}>Tech</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="border-top: 1px solid var(--border-color); padding-top: 10px;">
+      <span style="font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 6px;">
+        Oder direkt von laufender TubeArchivist Instanz abrufen:
+      </span>
+      <div class="download-form-row">
+        <input type="url" name="ta_url" placeholder="http://tubearchivist:8000" class="url-input">
+        <input type="password" name="ta_token" placeholder="TubeArchivist API Token" class="url-input">
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: flex-end;">
+      <button type="submit" class="btn">
+        <span>📥</span> Abos importieren
+      </button>
+    </div>
+  </form>
+</details>
+
 <!-- Subscribed Channels List -->
 <section>
   <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
