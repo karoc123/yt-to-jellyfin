@@ -45,18 +45,18 @@ async def view_home(
 ) -> HTMLResponse:
     """Quick Download and active queue view."""
     # Fetch recent jobs
-    cursor = db_conn.cursor()
-    cursor.execute(
-        """
-        SELECT * FROM jobs
-        ORDER BY created_at DESC LIMIT 20
-        """
-    )
-    raw_jobs = cursor.fetchall()
-    jobs = [Job.from_row(r) for r in raw_jobs]
-
     if lib and lib != "all":
-        jobs = [j for j in jobs if j.payload.get("library", "default") == lib]
+        rows = db_conn.execute(
+            """
+            SELECT * FROM jobs
+            WHERE COALESCE(json_extract(payload, '$.library'), 'default') = ?
+            ORDER BY created_at DESC LIMIT 20
+            """,
+            (lib,),
+        ).fetchall()
+    else:
+        rows = db_conn.execute("SELECT * FROM jobs ORDER BY created_at DESC LIMIT 20").fetchall()
+    jobs = [Job.from_row(r) for r in rows]
 
     return templates.TemplateResponse(
         request=request,

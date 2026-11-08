@@ -524,7 +524,6 @@ def test_g1_home_does_not_reload_each_job(
     assert calls == []
 
 
-@pytest.mark.xfail(strict=True, reason="G2: library filter applied after LIMIT 20")
 def test_g2_library_filter_before_limit(client: TestClient, temp_db: Database) -> None:
     _add_job(
         temp_db,
