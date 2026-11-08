@@ -23,6 +23,18 @@ logger = logging.getLogger(__name__)
 # Minimum seconds between two progress writes of the same job
 PROGRESS_WRITE_INTERVAL = 1.0
 
+PLAYLIST_TYPES = ("playlist", "multi_video")
+# Payload keys a playlist job hands down to its per-video jobs
+INHERITED_PAYLOAD_KEYS = (
+    "library",
+    "max_height",
+    "format",
+    "format_selector",
+    "format_sort",
+    "sponsorblock_remove",
+    "sponsorblock_mark",
+)
+
 
 class BackgroundWorker:
     """Consumes and executes jobs from the SQLite queue with crash recovery and progress."""
@@ -182,6 +194,43 @@ class BackgroundWorker:
                     ),
                 )
 
+    def _enqueue_playlist_entries(self, job: Job, info: dict[str, Any]) -> int:
+        """Enqueue one `download_video` job per (flat) playlist entry; returns the count.
+
+        Entries already downloaded (`completed`) or already queued are skipped.
+        """
+        inherited = {k: job.payload[k] for k in INHERITED_PAYLOAD_KEYS if k in job.payload}
+        seen: set[str] = set()
+        count = 0
+        for entry in info.get("entries") or []:
+            if not isinstance(entry, dict) or entry.get("ie_key") == "YoutubeTab":
+                continue  # nested playlists / channel tabs are not fanned out
+            video_id = str(entry.get("id") or "")
+            if not video_id or video_id in seen:
+                continue
+            seen.add(video_id)
+            with self.db.connection() as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM videos WHERE id = ? AND status = 'completed'", (video_id,)
+                ).fetchone()
+            if row:
+                continue
+
+            entry_url = str(entry.get("url") or "")
+            if not entry_url.startswith("http"):
+                entry_url = f"https://www.youtube.com/watch?v={video_id}"
+            payload: dict[str, Any] = {**inherited, "video_id": video_id, "url": entry_url}
+            if entry.get("title"):
+                payload["title"] = entry["title"]
+            if entry.get("channel_id"):
+                payload["channel_id"] = entry["channel_id"]
+            channel_name = entry.get("channel") or entry.get("uploader")
+            if channel_name:
+                payload["channel_name"] = channel_name
+            if self.queue.enqueue("download_video", payload, deduplicate_key="video_id"):
+                count += 1
+        return count
+
     async def _handle_download_video(self, job: Job) -> None:
         """Execute video download, layout organization, NFO writing, and DB record creation."""
         payload = job.payload
@@ -220,6 +269,11 @@ class BackgroundWorker:
 
         # Step 1: Extract metadata once (channel + publish date/year for Season directory)
         meta = await self.downloader.async_extract_info(url, DownloadOptions(**opts_kwargs))
+        if meta.raw_info.get("_type") in PLAYLIST_TYPES or "entries" in meta.raw_info:
+            count = self._enqueue_playlist_entries(job, meta.raw_info)
+            logger.info("Playlist job %s fanned out into %d video job(s)", job.id, count)
+            return
+
         channel_id = payload.get("channel_id") or meta.channel_id or "unknown_channel"
         channel_name = payload.get("channel_name") or meta.channel or "Unknown Channel"
         pub_date = meta.upload_date or payload.get("published_at", "") or ""

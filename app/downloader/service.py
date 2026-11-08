@@ -276,10 +276,14 @@ class YtDlpService:
         url: str,
         options: DownloadOptions | None = None,
     ) -> VideoMetadata:
-        """Extract video metadata without downloading media."""
+        """Extract video metadata without downloading media.
+
+        Playlist entries are extracted flat (`_type: url`), so a playlist URL is
+        enumerated cheaply; a single video is extracted fully.
+        """
         opts = options or self.default_options
         ydl_params = self.build_ydl_opts(opts)
-        ydl_params["extract_flat"] = False
+        ydl_params["extract_flat"] = "in_playlist"
 
         try:
             with yt_dlp.YoutubeDL(ydl_params) as ydl:

@@ -295,7 +295,6 @@ def test_d2_progress_written_to_job(
 # --- D3: playlist URLs fan out into one job per video ---------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="D3: playlist downloaded as single file")
 def test_d3_playlist_enqueues_one_job_per_video(
     fake_ydl: type[FakeYoutubeDL], temp_db: Database, media_root: Path
 ) -> None:
