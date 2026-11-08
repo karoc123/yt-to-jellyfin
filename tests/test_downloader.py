@@ -58,6 +58,24 @@ def test_build_ydl_opts_rate_limit_and_sleep(service: YtDlpService) -> None:
     assert opts["sleep_interval_requests"] == 1.0
 
 
+def test_build_ydl_opts_format_and_sponsorblock(service: YtDlpService) -> None:
+    """Verify max_height format generation and SponsorBlock settings (#6)."""
+    options = DownloadOptions(
+        max_height=1080,
+        format_sort="res:1080,vcodec:avc,acodec:m4a",
+        throttled_rate_bytes=100_000,
+        sponsorblock_remove=["sponsor", "intro"],
+        sponsorblock_mark=["all"],
+    )
+    opts = service.build_ydl_opts(options)
+
+    assert "bestvideo*[height<=1080]" in opts["format"]
+    assert opts["format_sort"] == ["res:1080", "vcodec:avc", "acodec:m4a"]
+    assert opts["throttledratelimit"] == 100_000
+    assert opts["sponsorblock_remove"] == ["sponsor", "intro"]
+    assert opts["sponsorblock_mark"] == ["all"]
+
+
 def test_build_ydl_opts_cookies(service: YtDlpService, tmp_path: Path) -> None:
     """Verify cookiefile integration when file exists."""
     cookies_file = tmp_path / "cookies.txt"

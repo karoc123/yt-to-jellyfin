@@ -132,13 +132,33 @@ class YtDlpService:
             "subtitle": str(output_dir / sub_template),
         }
 
+        # Format selector with optional max_height constraint
+        format_str = options.format_selector
+        if options.max_height:
+            h = options.max_height
+            format_str = f"bestvideo*[height<={h}]+bestaudio/best[height<={h}]/best"
+
         ydl_opts: dict[str, Any] = {
             "outtmpl": outtmpl,
             "quiet": True,
             "no_warnings": True,
-            "format": options.format_selector,
+            "format": format_str,
             "merge_output_format": options.merge_output_format,
         }
+
+        # Format Sort (--format-sort)
+        if options.format_sort:
+            if isinstance(options.format_sort, str):
+                sort_list = [s.strip() for s in options.format_sort.split(",") if s.strip()]
+                ydl_opts["format_sort"] = sort_list
+            else:
+                ydl_opts["format_sort"] = options.format_sort
+
+        # SponsorBlock integration
+        if options.sponsorblock_remove:
+            ydl_opts["sponsorblock_remove"] = options.sponsorblock_remove
+        if options.sponsorblock_mark:
+            ydl_opts["sponsorblock_mark"] = options.sponsorblock_mark
 
         # Subtitle settings (.vtt)
         if options.download_subtitles:
@@ -178,6 +198,8 @@ class YtDlpService:
         # Rate limiting & sleep intervals
         if options.rate_limit_bytes is not None:
             ydl_opts["ratelimit"] = options.rate_limit_bytes
+        if options.throttled_rate_bytes is not None:
+            ydl_opts["throttledratelimit"] = options.throttled_rate_bytes
         if options.sleep_interval is not None:
             ydl_opts["sleep_interval"] = options.sleep_interval
         if options.max_sleep_interval is not None:
