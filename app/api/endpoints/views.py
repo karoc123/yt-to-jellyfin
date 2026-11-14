@@ -1,6 +1,7 @@
 """HTML Web Views for Quick Download, Library Browser, and Subscriptions."""
 
 import os
+import zlib
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -44,6 +45,25 @@ def filesize(num_bytes: int | None) -> str:
 
 
 templates.env.filters["filesize"] = filesize
+
+
+def duration(seconds: float | None) -> str:
+    """Clock-style video length, e.g. "38:12" or "1:02:44"; empty when unknown."""
+    if not seconds:
+        return ""
+    total = int(seconds)
+    hours, rest = divmod(total, 3600)
+    minutes, secs = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
+def avatar_hue(name: str | None) -> int:
+    """Stable colour slot (0-7) for a channel's letter avatar."""
+    return zlib.crc32((name or "").encode("utf-8")) % 8
+
+
+templates.env.filters["duration"] = duration
+templates.env.filters["avatar_hue"] = avatar_hue
 
 BROWSER_PAGE_SIZE = 24
 

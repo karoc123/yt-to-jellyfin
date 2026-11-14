@@ -1,11 +1,4 @@
-function toggleAdvancedOptions() {
-  const adv = document.getElementById("advanced-options");
-  if (adv) {
-    adv.classList.toggle("open");
-  }
-}
-
-// Multi-select bulk management
+// Multi-select bulk management (library channel view)
 let selectedVideoIds = new Set();
 
 function updateBulkBar() {
@@ -14,10 +7,12 @@ function updateBulkBar() {
   if (!bar || !countEl) return;
 
   const count = selectedVideoIds.size;
-  if (count > 0) {
-    countEl.textContent = `${count} video${count > 1 ? "s" : ""} selected`;
-  }
+  countEl.textContent = `${count} selected`;
   bar.hidden = count === 0;
+  document.getElementById("vids")?.classList.toggle("selecting", count > 0);
+  document.querySelectorAll(".video-checkbox").forEach((cb) => {
+    cb.closest(".vid")?.classList.toggle("sel", cb.checked);
+  });
 }
 
 function toggleSelectVideo(checkbox) {
@@ -53,7 +48,7 @@ function deselectAllVideos() {
 
 async function bulkDeleteVideos() {
   if (selectedVideoIds.size === 0) return;
-  if (!confirm(`Are you sure you want to permanently delete ${selectedVideoIds.size} video(s)?`)) {
+  if (!confirm(`Delete ${selectedVideoIds.size} video(s) from the library and disk?`)) {
     return;
   }
 
@@ -92,3 +87,48 @@ async function bulkPinVideos(pinState) {
     alert("Network error: " + err);
   }
 }
+
+// Subscriptions: inline edit form below a row
+function toggleSubEdit(el) {
+  const sub = el.closest(".sub");
+  const form = sub?.querySelector(".sub-edit");
+  const trigger = sub?.querySelector("[aria-controls]");
+  if (!form) return;
+  form.hidden = !form.hidden;
+  trigger?.setAttribute("aria-expanded", String(!form.hidden));
+  if (!form.hidden) form.querySelector("select, input:not([type=hidden])")?.focus();
+}
+
+// Subscriptions: remove dialog switches its submit button between unsubscribe and delete
+document.addEventListener("change", (event) => {
+  const radio = event.target;
+  if (!(radio instanceof HTMLInputElement) || radio.name !== "mode") return;
+  const form = radio.closest(".remove-form");
+  const button = form?.querySelector("button[type=submit]");
+  if (!button) return;
+  const destructive = radio.value === "delete_all";
+  button.textContent = button.dataset[destructive ? "labelDelete_all" : "labelUnsubscribe"];
+  button.classList.toggle("btn-danger-solid", destructive);
+});
+
+// Settings: highlight the section currently in view
+document.addEventListener("DOMContentLoaded", () => {
+  const links = document.querySelectorAll(".snav a");
+  if (!links.length || !("IntersectionObserver" in window)) return;
+  const setCurrent = (id) => {
+    links.forEach((a) => {
+      if (a.getAttribute("href") === `#${id}`) a.setAttribute("aria-current", "true");
+      else a.removeAttribute("aria-current");
+    });
+  };
+  setCurrent(links[0].getAttribute("href").slice(1));
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) setCurrent(entry.target.id);
+      });
+    },
+    { rootMargin: "-80px 0px -65% 0px" },
+  );
+  document.querySelectorAll(".sec[id]").forEach((sec) => observer.observe(sec));
+});

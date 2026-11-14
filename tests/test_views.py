@@ -1,5 +1,6 @@
 """Integration tests for web views and frontend endpoints."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -338,7 +339,7 @@ def test_import_subscriptions_form_location(test_client: TestClient) -> None:
     res_settings = test_client.get("/settings")
     assert res_settings.status_code == 200
     assert 'action="/api/subscriptions/import"' in res_settings.text
-    assert "Import Subscriptions (TubeArchivist / OPML / JSON)" in res_settings.text
+    assert "Import subscriptions" in res_settings.text
 
 
 def test_import_subscriptions_empty_redirects_to_settings(test_client: TestClient) -> None:
@@ -507,7 +508,7 @@ def test_browser_subscribe_workflow(test_client: TestClient, tmp_path: Path) -> 
     # In browser channel view, channel shows as Not Subscribed and shows Subscribe button
     res = test_client.get("/browser?channel_id=UCresub")
     assert res.status_code == 200
-    assert "Not Subscribed" in res.text
+    assert "Not subscribed" in res.text
     assert "subscribe-modal" in res.text
 
     # Submit subscription from browser modal
@@ -536,9 +537,10 @@ def test_browser_subscribe_workflow(test_client: TestClient, tmp_path: Path) -> 
     assert "Subscribed" in res_after.text
 
 
-def test_ui_tooltips_present(test_client: TestClient) -> None:
-    """Test that data-tooltip attributes are present across all main views."""
+def test_ui_has_no_emoji(test_client: TestClient) -> None:
+    """Main views use the SVG icon set, not emoji."""
+    emoji = re.compile("[\U0001f300-\U0001faff\u2600-\u27bf\u2b00-\u2bff]")
     for path in ["/", "/browser", "/subscriptions", "/settings"]:
         res = test_client.get(path)
         assert res.status_code == 200
-        assert "data-tooltip=" in res.text
+        assert not emoji.findall(res.text), path

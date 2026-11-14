@@ -4,41 +4,46 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}yt-to-jellyfin{% endblock %}</title>
+  <link rel="preload" href="/static/fonts/archivo-latin-wdth.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/style.css">
   <script src="/static/js/htmx.min.js" defer></script>
   <script src="/static/js/app.js" defer></script>
 </head>
 <body>
+  {% from "components/ui.html" import icon with context %}
   {% set lib_qs = '?lib=' ~ (current_lib|urlencode) if current_lib and current_lib != 'all' else '' %}
-  <header>
-    <div class="header-container">
-      <a href="/{{ lib_qs }}" class="logo" data-tooltip="yt-to-jellyfin Home" data-tooltip-pos="bottom" title="yt-to-jellyfin Home">
-        <span aria-hidden="true">🎬</span> yt-to-jellyfin
+  {% set nav_items = [
+    ('home', '/', 'Download', 'download'),
+    ('browser', '/browser', 'Library', 'library'),
+    ('subscriptions', '/subscriptions', 'Subscriptions', 'rss'),
+    ('settings', '/settings', 'Settings', 'sliders'),
+  ] %}
+  <header class="top">
+    <div class="wrap top-in">
+      <a href="/{{ lib_qs }}" class="brand">
+        <span class="brand-mark">{{ icon('download') }}</span>
+        yt-to-jellyfin
       </a>
-
-      <!-- Library Switcher Pills: the active library lives in the URL (?lib=) only -->
-      <div class="library-switcher" id="lib-switcher">
-        <a href="{{ request.url.path }}" class="lib-pill {% if not current_lib or current_lib == 'all' %}active{% endif %}" data-tooltip="Show content from all libraries" data-tooltip-pos="bottom" title="Show all libraries">🌐 All</a>
-        {% for lib in library_options() %}
-        <a href="{{ request.url.path }}?lib={{ lib.name|urlencode }}" class="lib-pill {% if current_lib == lib.name %}active{% endif %}" data-tooltip="Filter by library: {{ lib.label }}" data-tooltip-pos="bottom" title="Filter by library: {{ lib.label }}">{{ lib.icon }} {{ lib.label }}</a>
+      <nav class="nav" aria-label="Main">
+        {% for key, path, label, _ in nav_items %}
+        <a href="{{ path }}{{ lib_qs }}" class="nav-link"{% if active_page == key %} aria-current="page"{% endif %}>{{ label }}</a>
         {% endfor %}
-      </div>
-
-      <nav class="nav-links">
-        <a href="/{{ lib_qs }}" class="nav-link {% if active_page == 'home' %}active{% endif %}" data-tooltip="Single video or playlist quick download" data-tooltip-pos="bottom" title="Quick Download">Download</a>
-        <a href="/browser{{ lib_qs }}" class="nav-link {% if active_page == 'browser' %}active{% endif %}" data-tooltip="Browse channels and videos in Jellyfin libraries" data-tooltip-pos="bottom" title="Library Overview">Library</a>
-        <a href="/subscriptions{{ lib_qs }}" class="nav-link {% if active_page == 'subscriptions' %}active{% endif %}" data-tooltip="Manage automated subscriptions and sync" data-tooltip-pos="bottom" title="Subscriptions">Subscriptions</a>
-        <a href="/settings{{ lib_qs }}" class="nav-link {% if active_page == 'settings' %}active{% endif %}" data-tooltip="Configure libraries, cookies, formats, and retention" data-tooltip-pos="bottom" title="Settings">Settings</a>
       </nav>
     </div>
   </header>
 
-  <main>
+  <main class="wrap page">
     {% set flash = flash_message(request) %}
     {% if flash %}
     <div class="flash flash-{{ flash.role }}" role="{{ flash.role }}">{{ flash.text }}</div>
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+
+  <nav class="tabs" aria-label="Main">
+    {% for key, path, label, icon_name in nav_items %}
+    <a href="{{ path }}{{ lib_qs }}"{% if active_page == key %} aria-current="page"{% endif %}>{{ icon(icon_name) }}{{ label }}</a>
+    {% endfor %}
+  </nav>
 </body>
 </html>

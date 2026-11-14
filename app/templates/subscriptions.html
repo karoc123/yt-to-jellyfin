@@ -1,214 +1,146 @@
 {% extends "base.html" %}
+{% from "components/ui.html" import icon, scope, avatar, lib_input, retention with context %}
 
 {% block title %}Subscriptions - yt-to-jellyfin{% endblock %}
 
 {% block content %}
-<div class="page-header">
+{% set lib_qs = '?lib=' ~ (current_lib|urlencode) if current_lib and current_lib != 'all' else '' %}
+{% set libs = library_options() %}
+{% set lib_labels = {} %}
+{% for lib in libs %}{% set _ = lib_labels.update({lib.name: lib.label}) %}{% endfor %}
+
+<div class="page-head">
   <div>
-    <h2 class="page-title">Manage Subscriptions</h2>
-    <p class="text-muted-sm">
-      Automated downloads, channel-specific retention (TTL / episode limit), and filters
-    </p>
+    <h1>Subscriptions</h1>
+    <p class="facts">{{ channels|length }} channel{{ 's' if channels|length != 1 }}, checked automatically for new videos</p>
   </div>
+  {{ scope() }}
 </div>
 
-<!-- Add Subscription Card -->
-<div class="download-card">
-  <h3 class="card-heading">Subscribe to New Channel</h3>
-  <form action="/api/subscriptions" method="POST" class="download-form">
-    <div class="download-form-row">
-      <input
-        type="text"
-        name="channel_input"
-        placeholder="Channel URL, handle (@name), or channel ID (UC...)..."
-        required
-        class="url-input"
-        autocomplete="off"
-        data-tooltip="Enter channel URL, @handle, or channel ID (UC...)"
-        title="Channel input"
-      >
-      <input
-        type="text"
-        name="name"
-        placeholder="Channel name (optional)"
-        class="url-input"
-        data-tooltip="Optional custom channel display name"
-        title="Channel name"
-      >
-      <button type="submit" class="btn" data-tooltip="Add subscription and begin monitoring" title="Subscribe">
-        <span aria-hidden="true">➕</span> Subscribe
-      </button>
-    </div>
+<form action="/api/subscriptions" method="POST">
+  <div class="cmd-field">
+    {{ icon('rss') }}
+    <input type="text" name="channel_input" required autocomplete="off" aria-label="Channel" placeholder="Channel URL, @handle or channel ID">
+    <button type="submit" class="btn btn-primary">Subscribe</button>
+  </div>
+  <div class="cmd-opts">
+    <label class="opt">Save to
+      <select name="library">
+        {% for lib in libs %}
+        <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="opt">Existing videos
+      <select name="initial_download">
+        <option value="feed" selected>All in feed (about 15)</option>
+        <option value="10">Last 10</option>
+        <option value="5">Last 5</option>
+        <option value="3">Last 3</option>
+        <option value="1">Last 1</option>
+        <option value="0">None, only new ones</option>
+      </select>
+    </label>
+    <label class="opt">Max episodes <input type="number" name="retention_count" min="0" placeholder="All"></label>
+    <label class="opt">Max days <input type="number" name="retention_days" min="0" placeholder="All"></label>
+    <label class="opt">Name <input type="text" name="name" placeholder="From YouTube"></label>
+  </div>
+</form>
 
-    <div class="form-grid">
-      <div>
-        <label class="field-label" for="add-library">Target Library:</label>
-        <select id="add-library" name="library" class="url-input input-sm" data-tooltip="Jellyfin library where channel videos are saved" title="Target Library">
-          {% for lib in library_options() %}
-          <option value="{{ lib.name }}" {% if current_lib == lib.name %}selected{% endif %}>{{ lib.label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-
-      <div>
-        <label class="field-label" for="add-initial-download">Download existing videos:</label>
-        <select id="add-initial-download" name="initial_download" class="url-input input-sm" data-tooltip="Choose how many existing videos to download immediately" title="Download existing videos">
-          <option value="feed" selected>All in RSS feed (~15 videos)</option>
-          <option value="10">Last 10 videos</option>
-          <option value="5">Last 5 videos</option>
-          <option value="3">Last 3 videos</option>
-          <option value="1">Last 1 video</option>
-          <option value="0">Only future videos (0 existing)</option>
-          <option value="channel_all" disabled>Entire channel [not implemented]</option>
-        </select>
-      </div>
-
-      <div>
-        <label class="field-label" for="add-retention-count">Max. Episodes (0 = unlimited):</label>
-        <input id="add-retention-count" type="number" name="retention_count" placeholder="e.g. 10" min="0" class="url-input input-sm" data-tooltip="Retain at most this many unpinned videos (0 = unlimited)" title="Max Episodes">
-      </div>
-
-      <div>
-        <label class="field-label" for="add-retention-days">TTL Days (0 = unlimited):</label>
-        <input id="add-retention-days" type="number" name="retention_days" placeholder="e.g. 30" min="0" class="url-input input-sm" data-tooltip="Delete unpinned videos older than this many days (0 = unlimited)" title="TTL Days">
-      </div>
-    </div>
-  </form>
-</div>
-
-<!-- Subscribed Channels List -->
-<section>
-  <div class="section-header">
-    <h3 class="section-title">Active Subscriptions ({{ channels|length }})</h3>
+<section class="block">
+  <div class="block-head">
+    <h2>Channels</h2>
+    {% if channels %}
     <form action="/api/subscriptions/sync-all" method="POST">
-      {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-      <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Check RSS feeds for all active subscriptions immediately" title="Sync All Now">
-        <span aria-hidden="true">🔄</span> Sync All Now
-      </button>
+      {{ lib_input() }}
+      <button type="submit" class="btn btn-sm">{{ icon('sync') }}Sync all</button>
     </form>
+    {% endif %}
   </div>
 
-  <div class="grid">
+  {% if channels %}
+  <div class="sub-grid subs-head label" aria-hidden="true">
+    <span>Channel</span><span>Library</span><span>Retention</span><span></span>
+  </div>
+  <ul class="subs">
     {% for ch in channels %}
-    <div class="card sub-card">
-      <div class="card-head">
-        <div>
-          <h4 class="sub-name">{{ ch.name }}</h4>
-          <span class="text-muted-xs">ID: {{ ch.id }}</span>
+    <li class="sub">
+      <div class="sub-grid sub-row">
+        <div class="sub-chan">
+          {{ avatar(ch.name, 'sm') }}
+          <span>
+            <a href="/browser?channel_id={{ ch.id }}{% if current_lib and current_lib != 'all' %}&lib={{ current_lib|urlencode }}{% endif %}" class="sub-name">{{ ch.name }}</a>
+            <span class="sub-id">{{ ch.id }}</span>
+          </span>
         </div>
-        <span class="badge badge-lib" data-tooltip="Target library" title="Library">{{ ch.library or 'default' }}</span>
+        <span class="sub-cell">{{ lib_labels.get(ch.library or 'default', ch.library or 'default') }}</span>
+        <span class="sub-cell">{{ retention(ch.retention_count, ch.retention_days) }}</span>
+        <div class="sub-acts">
+          <form action="/api/subscriptions/sync" method="POST">
+            <input type="hidden" name="channel_id" value="{{ ch.id }}">
+            {{ lib_input() }}
+            <button type="submit" class="ib" aria-label="Sync now" data-tooltip="Sync now">{{ icon('sync') }}</button>
+          </form>
+          <button type="button" class="ib" aria-label="Edit subscription" aria-expanded="false" aria-controls="edit-{{ loop.index }}" data-tooltip="Edit" onclick="toggleSubEdit(this)">{{ icon('edit') }}</button>
+          <button type="button" class="ib danger" aria-label="Remove subscription" data-tooltip="Remove" onclick="document.getElementById('del-modal-{{ loop.index }}').showModal()">{{ icon('trash') }}</button>
+        </div>
       </div>
 
-      <div class="sub-stats">
-        <span>Episode limit: {% if ch.retention_count and ch.retention_count > 0 %}{{ ch.retention_count }} videos{% else %}Unlimited{% endif %}</span>
-        <span>Retention period: {% if ch.retention_days and ch.retention_days > 0 %}{{ ch.retention_days }} days{% else %}Unlimited{% endif %}</span>
-        <span>Auto-Download: {% if ch.auto_download %}on{% else %}off{% endif %}</span>
-      </div>
-
-      <details class="sub-edit">
-        <summary data-tooltip="Edit subscription settings and retention limits" title="Edit subscription">Edit</summary>
-        <form action="/api/subscriptions/update" method="POST" class="sub-edit-form">
-          <input type="hidden" name="channel_id" value="{{ ch.id }}">
-          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          <label class="field-label" for="lib-{{ ch.id }}">Library</label>
-          <select id="lib-{{ ch.id }}" name="library" class="url-input input-sm">
-            {% for lib in library_options() %}
+      <form id="edit-{{ loop.index }}" action="/api/subscriptions/update" method="POST" class="sub-edit" hidden>
+        <input type="hidden" name="channel_id" value="{{ ch.id }}">
+        {{ lib_input() }}
+        <label><span class="fl">Library</span>
+          <select name="library" class="field">
+            {% for lib in libs %}
             <option value="{{ lib.name }}" {% if (ch.library or 'default') == lib.name %}selected{% endif %}>{{ lib.label }}</option>
             {% endfor %}
           </select>
-          <label class="field-label" for="count-{{ ch.id }}">Max. Episodes (0 = unlimited)</label>
-          <input id="count-{{ ch.id }}" type="number" name="retention_count" min="0" value="{{ ch.retention_count or 0 }}" class="url-input input-sm">
-          <label class="field-label" for="days-{{ ch.id }}">TTL Days (0 = unlimited)</label>
-          <input id="days-{{ ch.id }}" type="number" name="retention_days" min="0" value="{{ ch.retention_days or 0 }}" class="url-input input-sm">
-          <label class="checkbox-label">
-            <input type="checkbox" name="auto_download" value="1" {% if ch.auto_download %}checked{% endif %}> Automatically download new videos
-          </label>
-          <button type="submit" class="btn btn-sm">Save</button>
-        </form>
-      </details>
+        </label>
+        <label><span class="fl">Max episodes</span><input type="number" name="retention_count" min="0" value="{{ ch.retention_count or '' }}" placeholder="All" class="field"></label>
+        <label><span class="fl">Max days</span><input type="number" name="retention_days" min="0" value="{{ ch.retention_days or '' }}" placeholder="All" class="field"></label>
+        <div class="btns">
+          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn btn-ghost" onclick="toggleSubEdit(this)">Cancel</button>
+        </div>
+        <label class="check"><input type="checkbox" name="auto_download" value="1" {% if ch.auto_download %}checked{% endif %}> Download new videos automatically</label>
+      </form>
 
-      <div class="card-actions">
-        <form action="/api/subscriptions/sync" method="POST" class="action-main">
+      <dialog id="del-modal-{{ loop.index }}" class="dlg" aria-labelledby="del-title-{{ loop.index }}">
+        <form action="/api/subscriptions/delete" method="POST" class="remove-form">
+          <h2 id="del-title-{{ loop.index }}">Remove {{ ch.name }}?</h2>
           <input type="hidden" name="channel_id" value="{{ ch.id }}">
-          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          <button type="submit" class="btn btn-secondary btn-sm btn-block" data-tooltip="Check RSS feed for new videos now" title="Sync channel">
-            <span aria-hidden="true">🔄</span> Sync
-          </button>
-        </form>
-
-        <button type="button" class="btn btn-danger btn-sm" aria-label="Unsubscribe or delete" title="Unsubscribe or delete" data-tooltip="Unsubscribe or delete channel" onclick="document.getElementById('del-modal-{{ ch.id }}').showModal()">
-          <span aria-hidden="true">🗑️</span>
-        </button>
-
-        <dialog id="del-modal-{{ ch.id }}" class="modal-dialog">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h3 class="card-heading">Unsubscribe / Delete Channel</h3>
-              <p class="text-muted-sm"><strong>{{ ch.name }}</strong></p>
-            </div>
-
-            {% if ch.video_count and ch.video_count > 0 %}
-            <div class="dialog-box">
-              <span class="dialog-box-title">Option 1: Unsubscribe only (Recommended)</span>
-              <p class="text-muted-xs">
-                Stop automatic downloads. All <strong>{{ ch.video_count }}</strong> archived video(s) remain in your library.
-              </p>
-              <form action="/api/subscriptions/delete" method="POST">
-                <input type="hidden" name="channel_id" value="{{ ch.id }}">
-                <input type="hidden" name="mode" value="unsubscribe">
-                {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-                <button type="submit" class="btn btn-sm btn-block">
-                  <span aria-hidden="true">⏸️</span> Unsubscribe Only (Keep Videos)
-                </button>
-              </form>
-            </div>
-
-            <div class="form-divider"></div>
-
-            <div class="dialog-box">
-              <span class="dialog-box-title">Option 2: Delete channel &amp; all videos</span>
-              <p class="text-muted-xs">
-                Permanently delete the channel and all {{ ch.video_count }} video(s) from your library.
-              </p>
-              <form action="/api/subscriptions/delete" method="POST">
-                <input type="hidden" name="channel_id" value="{{ ch.id }}">
-                <input type="hidden" name="mode" value="delete_all">
-                {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-                <label class="checkbox-label">
-                  <input type="checkbox" name="delete_files" value="1">
-                  Also delete media files from disk
-                </label>
-                <button type="submit" class="btn btn-danger btn-sm btn-block" onclick="return confirm('Really delete this channel and all videos?');">
-                  <span aria-hidden="true">🗑️</span> Delete Channel &amp; All Videos
-                </button>
-              </form>
-            </div>
-            {% else %}
-            <p class="text-muted-sm">
-              No videos found in your library for this channel. Remove subscription?
-            </p>
-            <form action="/api/subscriptions/delete" method="POST">
-              <input type="hidden" name="channel_id" value="{{ ch.id }}">
-              <input type="hidden" name="mode" value="delete_all">
-              {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-              <button type="submit" class="btn btn-danger btn-sm btn-block">
-                <span aria-hidden="true">🗑️</span> Remove Subscription
-              </button>
-            </form>
-            {% endif %}
-
-            <div class="modal-cancel-wrapper">
-              <button type="button" class="btn btn-secondary btn-sm" onclick="this.closest('dialog').close()">Cancel</button>
-            </div>
+          {{ lib_input() }}
+          {% if ch.video_count and ch.video_count > 0 %}
+          <label class="choice">
+            <input type="radio" name="mode" value="unsubscribe" checked>
+            <b>Unsubscribe only</b>
+            <small>Stops new downloads. All {{ ch.video_count }} archived video{{ 's' if ch.video_count != 1 }} stay in your library.</small>
+          </label>
+          <label class="choice bad">
+            <input type="radio" name="mode" value="delete_all">
+            <b>Delete the channel and its videos</b>
+            <small>Removes the channel and all {{ ch.video_count }} video{{ 's' if ch.video_count != 1 }} from the library.</small>
+            <span class="check"><input type="checkbox" name="delete_files" value="1"> Also delete the media files from disk</span>
+          </label>
+          <div class="dlg-foot">
+            <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+            <button type="submit" class="btn" data-label-unsubscribe="Unsubscribe" data-label-delete_all="Delete channel">Unsubscribe</button>
           </div>
-        </dialog>
-      </div>
-    </div>
-    {% else %}
-    <div class="empty-state">
-      No subscriptions found. You can subscribe above or import subscriptions under <a href="/settings{% if current_lib and current_lib != 'all' %}?lib={{ current_lib }}{% endif %}">Settings</a>.
-    </div>
+          {% else %}
+          <input type="hidden" name="mode" value="delete_all">
+          <p class="help">No downloaded videos belong to this channel. The subscription is removed.</p>
+          <div class="dlg-foot">
+            <button type="button" class="btn btn-ghost" onclick="this.closest('dialog').close()">Cancel</button>
+            <button type="submit" class="btn btn-danger-solid">Remove</button>
+          </div>
+          {% endif %}
+        </form>
+      </dialog>
+    </li>
     {% endfor %}
-  </div>
+  </ul>
+  {% else %}
+  <p class="empty">No subscriptions yet. Subscribe to a channel above, or <a href="/settings{{ lib_qs }}#s-import">import them in Settings</a>.</p>
+  {% endif %}
 </section>
 {% endblock %}

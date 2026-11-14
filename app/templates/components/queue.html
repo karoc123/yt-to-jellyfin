@@ -1,74 +1,83 @@
 {# Download queue fragment: included by index.html and served by /partials/queue for HTMX #}
+{% from "components/ui.html" import icon, lib_input with context %}
 {% set queue_qs = '?lib=' ~ (current_lib|urlencode) if current_lib and current_lib != 'all' else '' %}
-<section id="queue"{% if queue_active %} hx-get="/partials/queue{{ queue_qs }}" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
-  <div class="section-header">
-    <h3 class="section-title">Current Queue</h3>
-    <span class="text-muted-sm">{{ jobs|length }} Job(s)</span>
+{% set lib_labels = {} %}
+{% for lib in library_options() %}{% set _ = lib_labels.update({lib.name: lib.label}) %}{% endfor %}
+{% set active_jobs = jobs|selectattr('status', 'in', ['pending', 'running'])|list %}
+{% set finished_jobs = jobs|rejectattr('status', 'in', ['pending', 'running'])|list %}
+{% set state_cls = {'running': 'run', 'pending': 'wait', 'completed': 'ok', 'failed': 'bad', 'cancelled': ''} %}
+
+{% macro job_row(job) %}
+{% set p = job.payload %}
+{% set thumb = p.thumbnail or p.thumbnail_url %}
+<li class="job">
+  <span class="thumb">{{ icon('link') }}{% if thumb %}<img src="{{ thumb }}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">{% endif %}</span>
+  <div>
+    {% if p.title %}
+    <div class="job-title">{{ p.title }}</div>
+    {% else %}
+    <div class="job-title is-url">{{ p.url or p.video_id or job.id }}</div>
+    {% endif %}
+    <div class="job-sub">{% if p.channel_name %}{{ p.channel_name }} · {% endif %}{{ lib_labels.get(p.library or 'default', p.library or 'default') }}</div>
+    {% if job.status == 'running' %}
+    <div class="meter"><i style="width: {{ job.progress }}%"></i></div>
+    {% endif %}
+    {% if job.status == 'failed' and job.error_message %}
+    <p class="job-err">{{ job.error_message }}</p>
+    {% endif %}
+  </div>
+  <div class="job-side">
+    {% if job.status == 'running' %}
+    <span class="state run"><i></i>{{ job.progress }}%</span>
+    {% else %}
+    <span class="state {{ state_cls.get(job.status, '') }}"><i></i>{{ job_status_labels.get(job.status, job.status) }}</span>
+    {% endif %}
+    {% if job.status in ('failed', 'cancelled', 'pending') %}
+    {% set job_action = 'cancel' if job.status == 'pending' else 'retry' %}
+    <form action="/api/jobs/{{ job.id }}/{{ job_action }}" method="POST"
+          hx-post="/api/jobs/{{ job.id }}/{{ job_action }}" hx-target="#queue" hx-swap="outerHTML">
+      {{ lib_input() }}
+      {% if job_action == 'retry' %}
+      <button type="submit" class="btn btn-sm">Retry</button>
+      {% else %}
+      <button type="submit" class="btn btn-ghost btn-sm">Cancel</button>
+      {% endif %}
+    </form>
+    {% endif %}
+    {% if p.url %}
+    <a href="{{ p.url }}" target="_blank" rel="noopener noreferrer" class="ib queue-link" aria-label="Open on YouTube" data-tooltip="Open on YouTube">{{ icon('ext') }}</a>
+    {% endif %}
+  </div>
+</li>
+{% endmacro %}
+
+<section id="queue" class="block"{% if queue_active %} hx-get="/partials/queue{{ queue_qs }}" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  <div class="block-head">
+    <h2>Queue</h2>
+    {% if jobs %}
+    {% set n_run = active_jobs|selectattr('status', 'equalto', 'running')|list|length %}
+    {% set n_wait = active_jobs|length - n_run %}
+    {% set n_fail = finished_jobs|selectattr('status', 'equalto', 'failed')|list|length %}
+    {% set summary = [] %}
+    {% if n_run %}{% set _ = summary.append(n_run ~ ' downloading') %}{% endif %}
+    {% if n_wait %}{% set _ = summary.append(n_wait ~ ' queued') %}{% endif %}
+    {% if n_fail %}{% set _ = summary.append(n_fail ~ ' failed') %}{% endif %}
+    <span class="facts">{{ summary|join(' · ') if summary else jobs|length ~ ' recent' }}</span>
+    {% endif %}
   </div>
 
   {% if jobs %}
-  <div class="grid">
-    {% for job in jobs %}
-    <div class="card job-card">
-      {% set thumb = job.payload.thumbnail or job.payload.thumbnail_url %}
-      {% if thumb %}
-      <div class="card-media">
-        <img src="{{ thumb }}" alt="{{ job.payload.title or 'Thumbnail' }}" class="card-thumb" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.parentElement.style.display='none';">
-      </div>
-      {% endif %}
-
-      <div class="card-body">
-        <div class="card-head">
-          <span class="card-title" title="{{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}">
-            {{ job.payload.title or job.payload.url or job.payload.video_id or job.id }}
-          </span>
-          <span class="badge badge-status-{{ job.status }}" data-tooltip="Job status: {{ job_status_labels.get(job.status, job.status) }}" title="{{ job_status_labels.get(job.status, job.status) }}">{{ job_status_labels.get(job.status, job.status) }}</span>
-        </div>
-
-        {% if job.payload.channel_name or (job.payload.title and job.payload.url) %}
-        <div class="card-meta">
-          {% if job.payload.channel_name %}
-          <span>{{ job.payload.channel_name }}</span>
-          {% else %}
-          <span></span>
-          {% endif %}
-          {% if job.payload.title and job.payload.url %}
-          <a href="{{ job.payload.url }}" target="_blank" rel="noopener noreferrer" class="queue-link" data-tooltip="Open original YouTube link" title="{{ job.payload.url }}">Source ↗</a>
-          {% endif %}
-        </div>
-        {% endif %}
-
-        <div class="progress-bar-container" data-tooltip="{{ job.progress }}% completed" title="{{ job.progress }}%">
-          <div class="progress-bar-fill" style="width: {{ job.progress }}%;"></div>
-        </div>
-
-        <div class="card-meta">
-          <span>{{ job.progress }}%</span>
-          <span>Library: {{ job.payload.library or 'default' }}</span>
-        </div>
-
-        {% if job.status == 'failed' and job.error_message %}
-        <p class="job-error">{{ job.error_message }}</p>
-        {% endif %}
-
-        {% if job.status in ('failed', 'cancelled', 'pending') %}
-        {% set job_action = 'cancel' if job.status == 'pending' else 'retry' %}
-        <form action="/api/jobs/{{ job.id }}/{{ job_action }}" method="POST"
-              hx-post="/api/jobs/{{ job.id }}/{{ job_action }}" hx-target="#queue" hx-swap="outerHTML"
-              class="form-actions">
-          {% if current_lib and current_lib != 'all' %}<input type="hidden" name="lib" value="{{ current_lib }}">{% endif %}
-          {% if job_action == 'retry' %}
-          <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Retry this download job" title="Retry download">Retry</button>
-          {% else %}
-          <button type="submit" class="btn btn-danger btn-sm" data-tooltip="Cancel this pending job" title="Cancel download">Cancel</button>
-          {% endif %}
-        </form>
-        {% endif %}
-      </div>
-    </div>
-    {% endfor %}
-  </div>
+  <ul class="jobs">
+    {% if active_jobs %}
+    <li class="label jobs-label">Active</li>
+    {% for job in active_jobs %}{{ job_row(job) }}{% endfor %}
+    {% endif %}
+    {% if finished_jobs %}
+    <li class="label jobs-label">Finished</li>
+    {% for job in finished_jobs %}{{ job_row(job) }}{% endfor %}
+    {% endif %}
+  </ul>
   {% else %}
-  <div class="empty-state">No active downloads in the queue.</div>
+  <p class="empty">Nothing in the queue. Paste a link above to start a download.</p>
   {% endif %}
 </section>

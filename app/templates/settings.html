@@ -1,416 +1,227 @@
 {% extends "base.html" %}
+{% from "components/ui.html" import icon with context %}
 
 {% block title %}Settings - yt-to-jellyfin{% endblock %}
 
 {% block content %}
-<div class="page-header">
+{% set lib_value = current_lib or 'all' %}
+<div class="page-head"><h1>Settings</h1></div>
+
+<div class="settings">
+  <nav class="snav" aria-label="Settings sections">
+    <a href="#s-libraries">Libraries</a>
+    <a href="#s-cookies">YouTube cookies</a>
+    <a href="#s-quality">Quality</a>
+    <a href="#s-retention">Retention</a>
+    <a href="#s-filters">Filters</a>
+    <a href="#s-schedule">Schedule</a>
+    <a href="#s-jellyfin">Jellyfin</a>
+    <a href="#s-import">Import</a>
+    <a href="#s-system">System</a>
+  </nav>
+
   <div>
-    <h2 class="page-title">Settings</h2>
-    <p class="text-muted-sm">
-      Libraries, authentication, video quality, retention, subscription imports, and Jellyfin integration
-    </p>
-  </div>
-</div>
-
-<!-- 1. Bibliotheken-Verwaltung -->
-<div class="download-card">
-  <div class="section-header">
-    <h3 class="card-heading">Libraries</h3>
-  </div>
-
-  {% if env_libraries_active %}
-  <div class="notice-banner">
-    Notice: The <code>LIBRARIES</code> environment variable is set and overrides the dynamic libraries list.
-  </div>
-  {% endif %}
-
-  <p class="text-muted-sm">
-    Each library corresponds to a subfolder under <code>{{ media_dir }}/&lt;name&gt;</code> and can be added as a separate TV Show library in Jellyfin.
-  </p>
-
-  <table class="libraries-table">
-    <thead>
-      <tr>
-        <th>Icon</th>
-        <th>Name (Folder)</th>
-        <th>Display Name</th>
-        <th>Channels</th>
-        <th>Videos</th>
-        <th>Action</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for lib in libraries %}
-      <tr>
-        <td>{{ lib.icon }}</td>
-        <td><code>{{ lib.name }}</code></td>
-        <td>{{ lib.label }}</td>
-        <td>{{ lib.channel_count }}</td>
-        <td>{{ lib.video_count }}</td>
-        <td>
+    <section class="sec" id="s-libraries">
+      <h2>Libraries</h2>
+      <p class="help">Each library is a folder under <code>{{ media_dir }}/&lt;name&gt;</code>. Add it to Jellyfin as its own TV Shows library.</p>
+      {% if env_libraries_active %}
+      <p class="notice">The <code>LIBRARIES</code> environment variable is set and overrides this list.</p>
+      {% endif %}
+      <div class="rows">
+        {% for lib in libraries %}
+        <div class="lib-row">
+          <code>{{ lib.name }}</code>
+          <span>{{ lib.label }}</span>
+          <span class="facts">{{ lib.channel_count }} channel{{ 's' if lib.channel_count != 1 }} · {{ lib.video_count }} video{{ 's' if lib.video_count != 1 }}</span>
           {% if lib.name != "default" and lib.channel_count == 0 %}
-          <form action="/api/settings/libraries/{{ lib.name }}/delete" method="POST" onsubmit="return confirm('Really delete library?');">
-            <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-            <button type="submit" class="btn btn-danger btn-sm" data-tooltip="Delete library (only when empty)" title="Delete library">Delete</button>
+          <form action="/api/settings/libraries/{{ lib.name }}/delete" method="POST" onsubmit="return confirm('Delete the library {{ lib.label }}?');">
+            <input type="hidden" name="library" value="{{ lib_value }}">
+            <button type="submit" class="ib danger" aria-label="Delete library {{ lib.label }}" data-tooltip="Delete library">{{ icon('trash') }}</button>
           </form>
-          {% elif lib.name == "default" %}
-          <span class="text-muted-sm">Default</span>
           {% else %}
-          <span class="text-muted-sm">In Use</span>
+          <button type="button" class="ib" disabled aria-label="Delete library {{ lib.label }}" title="{{ 'The default library cannot be deleted' if lib.name == 'default' else 'Only empty libraries can be deleted' }}">{{ icon('trash') }}</button>
           {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <h4 class="card-heading">Create New Library</h4>
-  <form action="/api/settings/libraries" method="POST" class="settings-form">
-    <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-    <div class="form-row">
-      <div class="form-group">
-        <label class="field-label" for="new-lib-name">Folder name (e.g. gaming):</label>
-        <input id="new-lib-name" type="text" name="name" placeholder="e.g. gaming" pattern="[a-z0-9_-]+" required class="url-input input-sm">
+        </div>
+        {% endfor %}
+        <form action="/api/settings/libraries" method="POST" class="lib-add">
+          <input type="hidden" name="library" value="{{ lib_value }}">
+          <input type="text" name="name" class="field mono" placeholder="folder-name" pattern="[a-z0-9_-]+" required aria-label="Folder name (lowercase letters, digits, - and _)">
+          <input type="text" name="label" class="field" placeholder="Display name" required aria-label="Display name">
+          <button type="submit" class="btn">Add library</button>
+        </form>
       </div>
-      <div class="form-group">
-        <label class="field-label" for="new-lib-label">Display name (e.g. Gaming):</label>
-        <input id="new-lib-label" type="text" name="label" placeholder="e.g. Gaming" required class="url-input input-sm">
+    </section>
+
+    <section class="sec" id="s-cookies">
+      <div class="sec-head">
+        <h2>YouTube Authentication (Cookies)</h2>
+        {% if cookies_saved and cookies_valid %}
+        <span class="state ok"><i></i>Cookies active</span>
+        {% elif cookies_saved %}
+        <span class="state bad"><i></i>Invalid file</span>
+        {% else %}
+        <span class="state"><i></i>No cookies saved</span>
+        {% endif %}
       </div>
-      <div class="form-group">
-        <label class="field-label" for="new-lib-icon">Icon / Emoji:</label>
-        <input id="new-lib-icon" type="text" name="icon" value="📁" maxlength="8" class="url-input input-sm">
-      </div>
-    </div>
-    <div class="form-actions-bar">
-      <button type="submit" class="btn btn-sm" data-tooltip="Create new Jellyfin library folder" title="Create Library">
-        <span aria-hidden="true">➕</span> Create Library
-      </button>
-    </div>
-  </form>
-</div>
-
-<!-- 2. YouTube Authentication (Cookies) -->
-<div class="download-card">
-  <div class="section-header">
-    <h3 class="card-heading">YouTube Authentication (Cookies)</h3>
-    <div>
-      {% if cookies_saved and cookies_valid %}
-      <span class="badge badge-status-completed">Cookies active</span>
-      {% elif cookies_saved and not cookies_valid %}
-      <span class="badge badge-status-failed">Invalid file</span>
-      {% else %}
-      <span class="badge badge-status-cancelled">No cookies saved</span>
-      {% endif %}
-    </div>
-  </div>
-
-  <p class="text-muted-sm">
-    Required for age-restricted videos (18+), private/member content, and YouTube bot verification.
-    Cookies are stored under <code>{{ cookies_path }}</code> with restrictive permissions (0600).
-  </p>
-
-  <form action="/api/settings/cookies" method="POST" enctype="multipart/form-data" class="settings-form">
-    <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-
-    <div class="form-group">
-      <label class="field-label" for="cookie-file">Upload Netscape <code>cookies.txt</code> file:</label>
-      <input id="cookie-file" type="file" name="file" accept=".txt" class="url-input input-sm">
-    </div>
-
-    <div class="form-group">
-      <label class="field-label" for="cookie-text">Or paste content from exported <code>cookies.txt</code>:</label>
-      <textarea id="cookie-text" name="cookies" rows="6" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com&#9;TRUE&#9;/&#9;TRUE&#9;0&#9;SID&#9;..." class="url-input cookie-textarea" spellcheck="false"></textarea>
-    </div>
-
-    <div class="form-actions-bar">
-      <button type="submit" class="btn" data-tooltip="Save YouTube authentication cookies" title="Save Cookies">
-        <span aria-hidden="true">💾</span> Save Cookies
-      </button>
+      <p class="help">Needed for age-restricted and members-only videos, and when YouTube asks for bot verification. Stored at <code>{{ cookies_path }}</code> with 0600 permissions.</p>
+      <form action="/api/settings/cookies" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+        <div class="rows">
+          <div class="row"><label class="row-label" for="cookie-file">Upload a Netscape <code>cookies.txt</code></label><input id="cookie-file" type="file" name="file" accept=".txt"></div>
+          <div class="row stack"><label class="row-label" for="cookie-text">Or paste the file contents</label><textarea id="cookie-text" name="cookies" rows="4" class="field mono" spellcheck="false" placeholder="# Netscape HTTP Cookie File"></textarea></div>
+        </div>
+        <div class="sec-foot">
+          <button type="submit" class="btn">Save cookies</button>
+          {% if cookies_saved %}
+          <button type="button" class="btn btn-ghost" hx-post="/api/settings/cookies/test" hx-target="#cookie-test-result" hx-swap="innerHTML">Test against YouTube</button>
+          <button type="submit" form="delete-cookies" class="btn btn-danger push">Delete saved cookies</button>
+          {% endif %}
+        </div>
+      </form>
       {% if cookies_saved %}
-      <button type="button" class="btn btn-secondary" hx-post="/api/settings/cookies/test" hx-target="#cookie-test-result" hx-swap="innerHTML" data-tooltip="Verify cookies against YouTube" title="Test Cookies">
-        <span aria-hidden="true">🔍</span> Test Cookies
-      </button>
+      <form id="delete-cookies" action="/api/settings/cookies/delete" method="POST" onsubmit="return confirm('Delete the saved cookies?');">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+      </form>
       {% endif %}
-    </div>
-  </form>
+      <div id="cookie-test-result" aria-live="polite"></div>
+    </section>
 
-  <div id="cookie-test-result"></div>
+    <section class="sec" id="s-quality">
+      <h2>Download quality</h2>
+      <p class="help">Defaults for every download. A single download can override them.</p>
+      <form action="/api/settings/download" method="POST">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+        <div class="rows">
+          <div class="row"><label class="row-label" for="max-height">Maximum resolution</label>
+            <select id="max-height" name="default_max_height" class="field">
+              <option value="" {% if not default_max_height %}selected{% endif %}>Best available</option>
+              <option value="2160" {% if default_max_height == '2160' %}selected{% endif %}>2160p (4K)</option>
+              <option value="1440" {% if default_max_height == '1440' %}selected{% endif %}>1440p</option>
+              <option value="1080" {% if default_max_height == '1080' %}selected{% endif %}>1080p</option>
+              <option value="720" {% if default_max_height == '720' %}selected{% endif %}>720p</option>
+              <option value="480" {% if default_max_height == '480' %}selected{% endif %}>480p</option>
+            </select>
+          </div>
+          <div class="row"><label for="format-sort"><span class="row-label">Format sorting</span><span class="row-help">Passed to yt-dlp as the format sort order.</span></label>
+            <input id="format-sort" type="text" name="format_sort" value="{{ format_sort }}" class="field mono" placeholder="res:1080,fps,codec:h264"></div>
+          <div class="row"><label for="subtitles-langs"><span class="row-label">Subtitle languages</span><span class="row-help">Comma-separated language codes.</span></label>
+            <input id="subtitles-langs" type="text" name="subtitles_langs" value="{{ subtitles_langs }}" class="field mono" placeholder="en,de"></div>
+          <div class="row"><label for="throttled-rate"><span class="row-label">Rate limit protection</span><span class="row-help">Throttling threshold in bytes per second, e.g. 5242880 for 5 MB/s.</span></label>
+            <input id="throttled-rate" type="number" name="throttled_rate_bytes" value="{{ throttled_rate_bytes }}" class="field mono" placeholder="5242880"></div>
+        </div>
+        <div class="sec-foot"><button type="submit" class="btn">Save</button></div>
+      </form>
+    </section>
 
-  {% if cookies_saved %}
-  <div class="delete-cookies-wrapper">
-    <form action="/api/settings/cookies/delete" method="POST" onsubmit="return confirm('Really delete saved cookies?');">
-      <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-      <button type="submit" class="btn btn-danger btn-sm" data-tooltip="Permanently delete saved YouTube cookies" title="Delete cookies">
-        <span aria-hidden="true">🗑️</span> Delete saved cookies
-      </button>
-    </form>
-  </div>
-  {% endif %}
-</div>
+    <section class="sec" id="s-retention">
+      <h2>Retention</h2>
+      <p class="help">Applies to channels without their own rules. Pinned videos are never deleted.</p>
+      <form action="/api/settings/retention" method="POST">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+        <div class="rows">
+          <div class="row"><label for="retention-days"><span class="row-label">Keep videos for</span><span class="row-help">Days since publication. Leave empty to keep forever.</span></label>
+            <input id="retention-days" type="number" name="retention_days" min="1" value="{{ retention_days }}" class="field" placeholder="Unlimited"></div>
+          <div class="row"><label for="retention-count"><span class="row-label">Keep per channel</span><span class="row-help">Newest episodes. Leave empty for no limit.</span></label>
+            <input id="retention-count" type="number" name="retention_count" min="1" value="{{ retention_count }}" class="field" placeholder="Unlimited"></div>
+        </div>
+        <div class="sec-foot">
+          <button type="submit" class="btn">Save</button>
+          <button type="submit" form="retention-run" class="btn btn-ghost">Run cleanup now</button>
+        </div>
+      </form>
+      <form id="retention-run" action="/api/settings/retention/run" method="POST">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+      </form>
+    </section>
 
-<!-- 3. Download & Video Quality -->
-<div class="download-card">
-  <h3 class="card-heading">Download & Video Quality</h3>
-  <p class="text-muted-sm">
-    Default values for yt-dlp video downloads. Individual jobs can override these.
-  </p>
+    <section class="sec" id="s-filters">
+      <h2>Filters</h2>
+      <p class="help">What subscriptions skip, and what gets cut out of downloads.</p>
+      <form action="/api/settings/filters" method="POST">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+        <div class="rows">
+          <label class="row toggle"><span class="row-label">Skip Shorts</span><input type="checkbox" class="switch" name="ignore_shorts" value="1" {% if ignore_shorts %}checked{% endif %}></label>
+          <label class="row toggle"><span class="row-label">Skip livestreams</span><input type="checkbox" class="switch" name="ignore_live" value="1" {% if ignore_live %}checked{% endif %}></label>
+          <label class="row toggle"><span><span class="row-label">Remove sponsor segments</span><span class="row-help">Uses SponsorBlock data for subscription downloads.</span></span><input type="checkbox" class="switch" name="sponsorblock_enabled" value="1" {% if sponsorblock_enabled %}checked{% endif %}></label>
+          <div class="row"><label for="sb-categories"><span class="row-label">SponsorBlock categories</span><span class="row-help">Comma-separated.</span></label>
+            <input id="sb-categories" type="text" name="sponsorblock_categories" value="{{ sponsorblock_categories }}" class="field mono" placeholder="sponsor,intro,outro,selfpromo,preview"></div>
+        </div>
+        <div class="sec-foot"><button type="submit" class="btn">Save</button></div>
+      </form>
+    </section>
 
-  <form action="/api/settings/download" method="POST" class="settings-form">
-    <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-    <div class="form-row">
-      <div class="form-group">
-        <label class="field-label" for="max-height">Maximum Video Resolution:</label>
-        <select id="max-height" name="default_max_height" class="url-input input-sm">
-          <option value="" {% if not default_max_height %}selected{% endif %}>Best possible (unlimited)</option>
-          <option value="2160" {% if default_max_height == '2160' %}selected{% endif %}>4K (2160p)</option>
-          <option value="1440" {% if default_max_height == '1440' %}selected{% endif %}>2K (1440p)</option>
-          <option value="1080" {% if default_max_height == '1080' %}selected{% endif %}>Full HD (1080p)</option>
-          <option value="720" {% if default_max_height == '720' %}selected{% endif %}>HD (720p)</option>
-          <option value="480" {% if default_max_height == '480' %}selected{% endif %}>SD (480p)</option>
-        </select>
-      </div>
+    <section class="sec" id="s-schedule">
+      <h2>Schedule</h2>
+      <p class="help">How often subscribed channels are checked for new videos.</p>
+      <form action="/api/settings/schedule" method="POST">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+        <div class="rows">
+          <div class="row"><label class="row-label" for="poll-interval">Check for new videos</label>
+            <select id="poll-interval" name="rss_poll_interval" class="field">
+              <option value="900" {% if rss_poll_interval == 900 %}selected{% endif %}>Every 15 minutes</option>
+              <option value="1800" {% if rss_poll_interval == 1800 %}selected{% endif %}>Every 30 minutes</option>
+              <option value="3600" {% if rss_poll_interval == 3600 %}selected{% endif %}>Every hour</option>
+              <option value="7200" {% if rss_poll_interval == 7200 %}selected{% endif %}>Every 2 hours</option>
+              <option value="14400" {% if rss_poll_interval == 14400 %}selected{% endif %}>Every 4 hours</option>
+              <option value="86400" {% if rss_poll_interval == 86400 %}selected{% endif %}>Once a day</option>
+            </select>
+          </div>
+        </div>
+        <div class="sec-foot">
+          <button type="submit" class="btn">Save</button>
+          <button type="submit" form="poller-run" class="btn btn-ghost">Check now</button>
+        </div>
+      </form>
+      <form id="poller-run" action="/api/settings/poller/run" method="POST">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+      </form>
+    </section>
 
-      <div class="form-group">
-        <label class="field-label" for="format-sort">Format Sorting (yt-dlp):</label>
-        <input id="format-sort" type="text" name="format_sort" value="{{ format_sort }}" placeholder="e.g. res:1080,fps,codec:h264" class="url-input input-sm">
-      </div>
-    </div>
+    <section class="sec" id="s-jellyfin">
+      <h2>Jellyfin</h2>
+      <p class="help">Optional. Triggers a Jellyfin library scan after each successful download.</p>
+      <form action="/api/settings/jellyfin" method="POST">
+        <input type="hidden" name="library" value="{{ lib_value }}">
+        <div class="rows">
+          <div class="row"><label class="row-label" for="jf-url">Server URL</label><input id="jf-url" type="url" name="jellyfin_url" value="{{ jellyfin_url }}" class="field mono" placeholder="http://jellyfin:8096"></div>
+          <div class="row"><label class="row-label" for="jf-key">API key</label><input id="jf-key" type="password" name="jellyfin_api_key" value="{{ jellyfin_api_key }}" class="field mono" placeholder="From the Jellyfin dashboard"></div>
+        </div>
+        <div class="sec-foot">
+          <button type="submit" class="btn">Save</button>
+          <button type="button" class="btn btn-ghost" hx-post="/api/settings/jellyfin/test" hx-include="#jf-url, #jf-key" hx-target="#jellyfin-test-result" hx-swap="innerHTML">Test connection</button>
+        </div>
+      </form>
+      <div id="jellyfin-test-result" aria-live="polite"></div>
+    </section>
 
-    <div class="form-row">
-      <div class="form-group">
-        <label class="field-label" for="subtitles-langs">Subtitle Languages (comma-separated):</label>
-        <input id="subtitles-langs" type="text" name="subtitles_langs" value="{{ subtitles_langs }}" placeholder="e.g. en,de" class="url-input input-sm">
-      </div>
+    <section class="sec" id="s-import">
+      <h2>Import subscriptions</h2>
+      <p class="help">From an OPML or TubeArchivist JSON export, or straight from a running TubeArchivist instance.</p>
+      <form action="/api/subscriptions/import" method="POST" enctype="multipart/form-data">
+        <div class="rows">
+          <div class="row"><label class="row-label" for="import-file">Export file (OPML or JSON)</label><input id="import-file" type="file" name="subscriptions_file" accept=".opml,.xml,.json"></div>
+          <div class="row"><label class="row-label" for="import-ta-url">Or TubeArchivist URL</label><input id="import-ta-url" type="url" name="ta_url" class="field mono" placeholder="http://tubearchivist:8000"></div>
+          <div class="row"><label class="row-label" for="import-ta-token">TubeArchivist API token</label><input id="import-ta-token" type="password" name="ta_token" class="field mono"></div>
+          <div class="row"><label class="row-label" for="import-library">Save to</label>
+            <select id="import-library" name="library" class="field">
+              {% for lib in library_options() %}
+              <option value="{{ lib.name }}" {% if current_lib == lib.name or (current_lib == 'all' and lib.name == 'default') %}selected{% endif %}>{{ lib.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="sec-foot"><button type="submit" class="btn">Import</button></div>
+      </form>
+    </section>
 
-      <div class="form-group">
-        <label class="field-label" for="throttled-rate">Rate Limit Protection (Bytes/s):</label>
-        <input id="throttled-rate" type="number" name="throttled_rate_bytes" value="{{ throttled_rate_bytes }}" placeholder="e.g. 5242880 for 5 MB/s" class="url-input input-sm">
-      </div>
-    </div>
-
-    <div class="form-actions-bar">
-      <button type="submit" class="btn" data-tooltip="Save resolution and quality preferences" title="Save Quality Settings">
-        <span aria-hidden="true">💾</span> Save Quality Settings
-      </button>
-    </div>
-  </form>
-</div>
-
-<!-- 4. Global Retention Rules -->
-<div class="download-card">
-  <div class="section-header">
-    <h3 class="card-heading">Retention Rules</h3>
-  </div>
-  <p class="text-muted-sm">
-    Default retention rules for channels without channel-specific rules. Pinned videos are never deleted.
-  </p>
-
-  <form action="/api/settings/retention" method="POST" class="settings-form">
-    <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-    <div class="form-row">
-      <div class="form-group">
-        <label class="field-label" for="retention-days">Default Retention Period (days):</label>
-        <input id="retention-days" type="number" name="retention_days" min="1" value="{{ retention_days }}" placeholder="Empty = unlimited" class="url-input input-sm">
-      </div>
-
-      <div class="form-group">
-        <label class="field-label" for="retention-count">Default Episode Limit (per channel):</label>
-        <input id="retention-count" type="number" name="retention_count" min="1" value="{{ retention_count }}" placeholder="Empty = unlimited" class="url-input input-sm">
-      </div>
-    </div>
-
-    <div class="form-actions-bar">
-      <button type="submit" class="btn" data-tooltip="Save default retention limits" title="Save Retention Rules">
-        <span aria-hidden="true">💾</span> Save Retention Rules
-      </button>
-    </div>
-  </form>
-
-  <div class="delete-cookies-wrapper">
-    <form action="/api/settings/retention/run" method="POST">
-      <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-      <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Run retention cleanup now across all channels" title="Run Retention Cleanup Now">
-        <span aria-hidden="true">🧹</span> Run Retention Cleanup Now
-      </button>
-    </form>
-  </div>
-</div>
-
-<!-- 5. Subscriptions, Filters & SponsorBlock -->
-<div class="download-card">
-  <h3 class="card-heading">Subscriptions, Filters & SponsorBlock</h3>
-  <p class="text-muted-sm">
-    Filters for automatic channel subscriptions and SponsorBlock removal.
-  </p>
-
-  <form action="/api/settings/filters" method="POST" class="settings-form">
-    <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-    <div class="checkbox-row">
-      <label class="checkbox-label" for="ignore-shorts">
-        <input id="ignore-shorts" type="checkbox" name="ignore_shorts" value="1" {% if ignore_shorts %}checked{% endif %}>
-        Ignore YouTube Shorts (do not download automatically)
-      </label>
-
-      <label class="checkbox-label" for="ignore-live">
-        <input id="ignore-live" type="checkbox" name="ignore_live" value="1" {% if ignore_live %}checked{% endif %}>
-        Ignore Livestreams
-      </label>
-
-      <label class="checkbox-label" for="sponsorblock-enabled">
-        <input id="sponsorblock-enabled" type="checkbox" name="sponsorblock_enabled" value="1" {% if sponsorblock_enabled %}checked{% endif %}>
-        Apply SponsorBlock automatically
-      </label>
-    </div>
-
-    <div class="form-group">
-      <label class="field-label" for="sb-categories">SponsorBlock Categories (comma-separated):</label>
-      <input id="sb-categories" type="text" name="sponsorblock_categories" value="{{ sponsorblock_categories }}" placeholder="sponsor,intro,outro,selfpromo,preview" class="url-input input-sm">
-    </div>
-
-    <div class="form-actions-bar">
-      <button type="submit" class="btn" data-tooltip="Save Shorts, Live, and SponsorBlock filters" title="Save Filters">
-        <span aria-hidden="true">💾</span> Save Filters
-      </button>
-    </div>
-  </form>
-</div>
-
-<!-- 6. Import Subscriptions -->
-<details class="download-card import-card">
-  <summary data-tooltip="Import channel subscriptions from OPML or TubeArchivist" title="Import Subscriptions">
-    <span aria-hidden="true">📥</span> Import Subscriptions (TubeArchivist / OPML / JSON)
-  </summary>
-  <p class="text-muted-sm import-desc">
-    Import channel subscriptions from an OPML/XML export, TubeArchivist JSON file, or directly from a running TubeArchivist instance.
-  </p>
-  <form action="/api/subscriptions/import" method="POST" enctype="multipart/form-data" class="import-form">
-    <div class="form-grid form-grid-wide">
-      <div>
-        <label class="field-label" for="import-file">
-          Upload file (OPML XML or TubeArchivist JSON):
-        </label>
-        <input id="import-file" type="file" name="subscriptions_file" accept=".opml,.xml,.json" class="url-input input-sm" data-tooltip="Select an OPML or TubeArchivist JSON file" title="Subscriptions file">
-      </div>
-      <div>
-        <label class="field-label" for="import-library">
-          Target Library:
-        </label>
-        <select id="import-library" name="library" class="url-input input-sm" data-tooltip="Jellyfin library for imported subscriptions" title="Target Library">
-          {% for lib in library_options() %}
-          <option value="{{ lib.name }}" {% if current_lib == lib.name or (current_lib == 'all' and lib.name == 'default') %}selected{% endif %}>{{ lib.label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <div class="form-divider">
-      <span class="field-label">
-        Or fetch directly from a running TubeArchivist instance:
-      </span>
-      <div class="download-form-row">
-        <input type="url" name="ta_url" placeholder="http://tubearchivist:8000" class="url-input" data-tooltip="Base URL of your running TubeArchivist server" title="TubeArchivist URL">
-        <input type="password" name="ta_token" placeholder="TubeArchivist API Token" class="url-input" data-tooltip="API token from TubeArchivist settings" title="API Token">
-      </div>
-    </div>
-
-    <div class="form-actions-bar">
-      <button type="submit" class="btn" data-tooltip="Import subscriptions and begin syncing" title="Import Subscriptions">
-        <span aria-hidden="true">📥</span> Import Subscriptions
-      </button>
-    </div>
-  </form>
-</details>
-
-<!-- 7. Synchronization & Schedule -->
-<div class="download-card">
-  <h3 class="card-heading">Synchronization & Schedule</h3>
-  <p class="text-muted-sm">
-    Interval for automatically checking for new videos in subscribed RSS feeds.
-  </p>
-
-  <form action="/api/settings/schedule" method="POST" class="settings-form">
-    <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-    <div class="form-row">
-      <div class="form-group">
-        <label class="field-label" for="poll-interval">Poll Interval:</label>
-        <select id="poll-interval" name="rss_poll_interval" class="url-input input-sm">
-          <option value="900" {% if rss_poll_interval == 900 %}selected{% endif %}>Every 15 minutes (Default)</option>
-          <option value="1800" {% if rss_poll_interval == 1800 %}selected{% endif %}>Every 30 minutes</option>
-          <option value="3600" {% if rss_poll_interval == 3600 %}selected{% endif %}>Every hour</option>
-          <option value="7200" {% if rss_poll_interval == 7200 %}selected{% endif %}>Every 2 hours</option>
-          <option value="14400" {% if rss_poll_interval == 14400 %}selected{% endif %}>Every 4 hours</option>
-          <option value="86400" {% if rss_poll_interval == 86400 %}selected{% endif %}>Once daily (24 hours)</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="form-actions-bar">
-      <button type="submit" class="btn" data-tooltip="Save RSS polling interval" title="Save Schedule">
-        <span aria-hidden="true">💾</span> Save Schedule
-      </button>
-    </div>
-  </form>
-
-  <div class="delete-cookies-wrapper">
-    <form action="/api/settings/poller/run" method="POST">
-      <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-      <button type="submit" class="btn btn-secondary btn-sm" data-tooltip="Poll all active channel subscriptions immediately" title="Check for New Videos Now">
-        <span aria-hidden="true">🔄</span> Check for New Videos Now
-      </button>
-    </form>
-  </div>
-</div>
-
-<!-- 8. Jellyfin Integration -->
-<div class="download-card">
-  <h3 class="card-heading">Jellyfin Integration</h3>
-  <p class="text-muted-sm">
-    Optional: Automatically trigger a Jellyfin library scan after each successful video download.
-  </p>
-
-  <form action="/api/settings/jellyfin" method="POST" class="settings-form">
-    <input type="hidden" name="library" value="{{ current_lib or 'all' }}">
-    <div class="form-row">
-      <div class="form-group">
-        <label class="field-label" for="jf-url">Jellyfin Server URL:</label>
-        <input id="jf-url" type="url" name="jellyfin_url" value="{{ jellyfin_url }}" placeholder="http://jellyfin:8096" class="url-input input-sm">
-      </div>
-
-      <div class="form-group">
-        <label class="field-label" for="jf-key">Jellyfin API-Key:</label>
-        <input id="jf-key" type="password" name="jellyfin_api_key" value="{{ jellyfin_api_key }}" placeholder="API key from Jellyfin Dashboard" class="url-input input-sm">
-      </div>
-    </div>
-
-    <div class="form-actions-bar">
-      <button type="submit" class="btn" data-tooltip="Save Jellyfin server URL and API key" title="Save Jellyfin Settings">
-        <span aria-hidden="true">💾</span> Save Jellyfin Settings
-      </button>
-      <button type="button" class="btn btn-secondary" hx-post="/api/settings/jellyfin/test" hx-include="#jf-url, #jf-key" hx-target="#jellyfin-test-result" hx-swap="innerHTML" data-tooltip="Test connection to Jellyfin server" title="Test Connection">
-        <span aria-hidden="true">🔌</span> Test Connection
-      </button>
-    </div>
-  </form>
-
-  <div id="jellyfin-test-result"></div>
-</div>
-
-<!-- 9. System & Directories -->
-<div class="download-card">
-  <h3 class="card-heading">System & Directories</h3>
-  <div class="settings-info-grid">
-    <div>
-      <span class="field-label">Media Directory:</span>
-      <div class="text-muted-sm"><code>{{ media_dir }}</code></div>
-    </div>
-    <div>
-      <span class="field-label">Database Path:</span>
-      <div class="text-muted-sm"><code>{{ database_path }}</code></div>
-    </div>
-    <div>
-      <span class="field-label">Cookie Path:</span>
-      <div class="text-muted-sm"><code>{{ cookies_path }}</code></div>
-    </div>
+    <section class="sec" id="s-system">
+      <h2>System</h2>
+      <dl class="paths">
+        <dt>Media directory</dt><dd>{{ media_dir }}</dd>
+        <dt>Database</dt><dd>{{ database_path }}</dd>
+        <dt>Cookies</dt><dd>{{ cookies_path }}</dd>
+      </dl>
+    </section>
   </div>
 </div>
 {% endblock %}

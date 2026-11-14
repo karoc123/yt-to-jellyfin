@@ -1,0 +1,32 @@
+{# Shared UI macros. Import with: {% from "components/ui.html" import icon, ... with context %} #}
+
+{% macro icon(name) -%}
+<svg class="i" aria-hidden="true"><use href="/static/icons.svg#{{ name }}"/></svg>
+{%- endmacro %}
+
+{# Library filter: the active library lives in the URL (?lib=) only #}
+{% macro scope() -%}
+<nav class="scope lib-switcher" id="lib-switcher" aria-label="Library">
+  <a href="{{ request.url.path }}" class="lib-pill"{% if not current_lib or current_lib == 'all' %} aria-current="true"{% endif %}>All</a>
+  {%- for lib in library_options() %}
+  <a href="{{ request.url.path }}?lib={{ lib.name|urlencode }}" class="lib-pill"{% if current_lib == lib.name %} aria-current="true"{% endif %}>{{ lib.label }}</a>
+  {%- endfor %}
+</nav>
+{%- endmacro %}
+
+{% macro avatar(name, size='', poster_url=None) -%}
+<span class="ava {{ size }} hue-{{ name|avatar_hue }}" aria-hidden="true">{{ (name or '?')[:1]|upper }}
+  {%- if poster_url %}<img src="{{ poster_url }}" alt="" loading="lazy" onerror="this.remove()">{% endif -%}
+</span>
+{%- endmacro %}
+
+{% macro lib_input(name='lib') -%}
+{% if current_lib and current_lib != 'all' %}<input type="hidden" name="{{ name }}" value="{{ current_lib }}">{% endif %}
+{%- endmacro %}
+
+{% macro retention(count, days, empty='No limit') -%}
+{%- set parts = [] -%}
+{%- if count and count > 0 %}{% set _ = parts.append(count ~ ' videos') %}{% endif -%}
+{%- if days and days > 0 %}{% set _ = parts.append(days ~ ' days') %}{% endif -%}
+{{ parts|join(' · ') if parts else empty }}
+{%- endmacro %}
