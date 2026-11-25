@@ -3,19 +3,22 @@
 import asyncio
 import glob
 import logging
+import re
 import shutil
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import yt_dlp
-from yt_dlp.utils import DownloadError, ExtractorError
+from yt_dlp.utils import DownloadError, ExtractorError, parse_duration
 
 from app.core.config import settings
 from app.downloader.exceptions import (
     CookieError,
     DownloadFailedError,
     VideoUnavailableError,
+    VideoUpcomingError,
     YtDlpError,
 )
 from app.downloader.options import (
@@ -257,6 +260,13 @@ class YtDlpService:
     def _classify_error(self, exc: Exception, url: str) -> YtDlpError:
         """Classify yt-dlp exceptions into domain-specific error types."""
         msg = str(exc).lower()
+        premiere = re.match(
+            r"^(?:error: )?(?:\[youtube\] [\w-]+: )?premieres (in|on|at)\b([^\r\n]*)", msg
+        )
+        if premiere:
+            when, detail = premiere.groups()
+            return VideoUpcomingError(parse_duration(detail) if when == "in" else None)
+
         unavailable_indicators = [
             "private video",
             "video unavailable",
@@ -297,9 +307,14 @@ class YtDlpService:
                 info = ydl.extract_info(url, download=False)
                 if not info:
                     raise DownloadFailedError(f"No metadata returned for {url}")
+                if info.get("live_status") == "is_upcoming":
+                    release = info.get("release_timestamp")
+                    raise VideoUpcomingError(release - time.time() if release else None)
                 return parse_metadata(info)
         except (DownloadError, ExtractorError) as exc:
             raise self._classify_error(exc, url) from exc
+        except VideoUpcomingError:
+            raise
         except Exception as exc:
             raise DownloadFailedError(
                 f"Unexpected error extracting metadata from {url}: {exc}"

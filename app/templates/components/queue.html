@@ -29,6 +29,8 @@
   <div class="job-side">
     {% if job.status == 'running' %}
     <span class="state run"><i></i>{{ job.progress }}%</span>
+    {% elif job.status == 'pending' and job.next_attempt_at %}
+    <span class="state wait" title="Next check: {{ job.next_attempt_at }}"><i></i>Waiting for release</span>
     {% else %}
     <span class="state {{ state_cls.get(job.status, '') }}"><i></i>{{ job_status_labels.get(job.status, job.status) }}</span>
     {% endif %}

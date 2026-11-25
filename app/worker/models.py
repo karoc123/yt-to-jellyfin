@@ -28,6 +28,7 @@ class Job:
     created_at: str = field(default_factory=utc_now_str)
     started_at: str | None = None
     completed_at: str | None = None
+    next_attempt_at: str | None = None
 
     @classmethod
     def create(cls, job_type: str, payload: dict[str, Any] | None = None) -> "Job":
@@ -64,4 +65,5 @@ class Job:
             created_at=row["created_at"],
             started_at=row["started_at"],
             completed_at=row["completed_at"],
+            next_attempt_at=row["next_attempt_at"],
         )

@@ -1,6 +1,7 @@
 """Tests for SQLite queue, background worker, crash recovery, and RSS poller."""
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
@@ -8,6 +9,7 @@ import httpx
 import pytest
 
 from app.db.database import Database
+from app.downloader.exceptions import VideoUpcomingError
 from app.downloader.options import DownloadResult, VideoMetadata
 from app.jellyfin.layout import JellyfinLayout
 from app.jellyfin.nfo import NfoGenerator
@@ -252,10 +254,13 @@ def test_subscription_poller(queue: JobQueue, temp_db: Database) -> None:
     assert second_enqueued == []
 
 
+@pytest.mark.parametrize("upcoming", [False, True])
 def test_background_worker_execution(
     queue: JobQueue,
     temp_db: Database,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    upcoming: bool,
 ) -> None:
     """Test BackgroundWorker executing a download_video job end-to-end (#7)."""
     media_dir = tmp_path / "media"
@@ -307,18 +312,39 @@ def test_background_worker_execution(
     )
 
     # Enqueue a download job with max_height and sponsorblock options
-    job = queue.enqueue(
-        "download_video",
-        {
-            "video_id": "vid_worker_1",
-            "channel_id": "UCtech",
-            "channel_name": "Tech Channel",
-            "library": "tech",
-            "max_height": 1080,
-            "sponsorblock_remove": ["sponsor"],
-        },
-    )
+    payload = {
+        "channel_id": "UCtech",
+        "channel_name": "Tech Channel",
+        "library": "tech",
+        "max_height": 1080,
+        "sponsorblock_remove": ["sponsor"],
+    }
+    if upcoming:
+        payload["url"] = "https://www.youtube.com/watch?v=vid_worker_1"
+    else:
+        payload["video_id"] = "vid_worker_1"
+    job = queue.enqueue("download_video", payload)
     assert job is not None
+
+    if upcoming:
+        mock_downloader.async_extract_info.side_effect = VideoUpcomingError(7 * 3600)
+        assert asyncio.run(worker.process_next_job())
+        mock_downloader.async_download.assert_not_awaited()
+
+        restarted_queue = JobQueue(temp_db)
+        waiting_job = restarted_queue.get_job(job.id)
+        assert waiting_job is not None
+        assert waiting_job.status == "pending"
+        assert waiting_job.error_message is None
+        assert waiting_job.next_attempt_at is not None
+        delay = datetime.fromisoformat(waiting_job.next_attempt_at) - datetime.now(UTC)
+        assert timedelta(hours=6, minutes=59) < delay <= timedelta(hours=7)
+        assert restarted_queue.claim_next_job() is None
+
+        other_job = restarted_queue.enqueue("retention", {})
+        assert restarted_queue.claim_next_job().id == other_job.id
+        monkeypatch.setattr("app.worker.queue.utc_now_str", lambda: waiting_job.next_attempt_at)
+        mock_downloader.async_extract_info.side_effect = None
 
     # Process job
     processed = asyncio.run(worker.process_next_job())
@@ -329,6 +355,7 @@ def test_background_worker_execution(
     assert completed_job is not None
     assert completed_job.status == "completed"
     assert completed_job.progress == 100
+    assert completed_job.next_attempt_at is None
     assert completed_job.payload.get("title") == "Worker Video Test"
 
     # Companion .nfo file should have been generated

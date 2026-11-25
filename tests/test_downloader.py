@@ -20,6 +20,7 @@ from app.downloader import (
     parse_metadata,
     wrap_progress_hook,
 )
+from app.downloader.exceptions import VideoUpcomingError
 
 
 @pytest.fixture
@@ -249,6 +250,37 @@ def test_extract_info_errors(service: YtDlpService) -> None:
         mock_ydl.extract_info.side_effect = ExtractorError("Failed to parse page")
         with pytest.raises(DownloadFailedError):
             service.extract_info("https://youtube.com/watch?v=broken")
+
+
+def test_extract_info_reports_premiere_countdown(service: YtDlpService) -> None:
+    url = "https://www.youtube.com/watch?v=GKSQYbELDzw"
+    with patch("yt_dlp.YoutubeDL") as ydl:
+        ydl.return_value.__enter__.return_value.extract_info.side_effect = DownloadError(
+            "ERROR: [youtube] GKSQYbELDzw: Premieres in 7 hours"
+        )
+        with pytest.raises(VideoUpcomingError) as exc:
+            service.extract_info(url)
+
+    assert exc.value.retry_after_seconds == 7 * 3600
+
+
+@pytest.mark.parametrize("release_timestamp", [None, 1_800_025_200])
+def test_extract_info_reports_upcoming_metadata(
+    service: YtDlpService, release_timestamp: int | None
+) -> None:
+    with (
+        patch("yt_dlp.YoutubeDL") as ydl,
+        patch("app.downloader.service.time.time", return_value=1_800_000_000),
+    ):
+        ydl.return_value.__enter__.return_value.extract_info.return_value = {
+            "id": "upcoming",
+            "live_status": "is_upcoming",
+            "release_timestamp": release_timestamp,
+        }
+        with pytest.raises(VideoUpcomingError) as exc:
+            service.extract_info("https://www.youtube.com/watch?v=upcoming")
+
+    assert exc.value.retry_after_seconds == (7 * 3600 if release_timestamp else None)
 
 
 def test_download_pipeline(service: YtDlpService, tmp_path: Path) -> None:

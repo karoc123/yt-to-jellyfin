@@ -19,3 +19,4 @@ services:
     volumes:
       - ./data:/data
       - ./media:/media
+      - /mnt/tombstone/yt-to-jellyfin:/media

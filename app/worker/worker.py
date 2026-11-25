@@ -10,7 +10,7 @@ from typing import Any
 from app.core.config import settings
 from app.core.settings_service import notify_jellyfin_refresh, settings_service
 from app.db.database import Database, db
-from app.downloader.exceptions import VideoUnavailableError
+from app.downloader.exceptions import VideoUnavailableError, VideoUpcomingError
 from app.downloader.options import DownloadOptions, ProgressUpdate
 from app.downloader.service import YtDlpService, downloader, wrap_progress_hook
 from app.jellyfin import JellyfinLayout, NfoGenerator, jellyfin_layout, nfo_generator
@@ -125,6 +125,14 @@ class BackgroundWorker:
 
             self.queue.mark_completed(job.id)
             logger.info("Completed job %s successfully", job.id)
+            return True
+        except VideoUpcomingError as exc:
+            delay = 1800 if exc.retry_after_seconds is None else max(300, exc.retry_after_seconds)
+            next_attempt = (datetime.now(UTC) + timedelta(seconds=delay)).strftime(
+                "%Y-%m-%dT%H:%M:%SZ"
+            )
+            self.queue.defer(job.id, next_attempt)
+            logger.info("Job %s is waiting for release. Next check at %s", job.id, next_attempt)
             return True
         except Exception as exc:
             logger.error("Job %s failed: %s", job.id, exc)

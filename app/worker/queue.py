@@ -85,30 +85,33 @@ class JobQueue:
             return job
 
     def claim_next_job(self) -> Job | None:
-        """Atomically fetch and mark the oldest pending job as running."""
+        """Atomically fetch and mark the oldest ready job as running."""
+        now = utc_now_str()
         with self.db.connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
                 SELECT id FROM jobs
                 WHERE status = 'pending'
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
                 ORDER BY created_at ASC
                 LIMIT 1
-                """
+                """,
+                (now,),
             )
             row = cursor.fetchone()
             if not row:
                 return None
 
             job_id = row["id"]
-            now = utc_now_str()
             cursor.execute(
                 """
                 UPDATE jobs
-                SET status = 'running', started_at = ?
+                SET status = 'running', started_at = ?, next_attempt_at = NULL
                 WHERE id = ? AND status = 'pending'
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
                 """,
-                (now, job_id),
+                (now, job_id, now),
             )
             if cursor.rowcount == 0:
                 return None
@@ -116,6 +119,19 @@ class JobQueue:
             cursor.execute("SELECT * FROM jobs WHERE id = ?", (job_id,))
             claimed_row = cursor.fetchone()
             return Job.from_row(claimed_row) if claimed_row else None
+
+    def defer(self, job_id: str, next_attempt_at: str) -> None:
+        """Return a running job to the queue for a later attempt."""
+        with self.db.connection() as conn:
+            conn.execute(
+                """
+                UPDATE jobs
+                SET status = 'pending', next_attempt_at = ?, started_at = NULL,
+                    progress = 0, error_message = NULL
+                WHERE id = ? AND status = 'running'
+                """,
+                (next_attempt_at, job_id),
+            )
 
     def update_progress(self, job_id: str, progress: int) -> None:
         """Update job progress percentage (0-100)."""
@@ -181,7 +197,7 @@ class JobQueue:
                 """
                 UPDATE jobs
                 SET status = 'pending', progress = 0, error_message = NULL,
-                    started_at = NULL, completed_at = NULL
+                    started_at = NULL, completed_at = NULL, next_attempt_at = NULL
                 WHERE id = ? AND status IN ('failed', 'cancelled')
                 """,
                 (job_id,),
